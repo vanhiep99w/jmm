@@ -33,6 +33,22 @@ class Data {
 Nếu một thread thấy reference `Data` **trước khi** constructor hoàn tất ghi ra
 main memory, nó có thể đọc `x == 0`.
 
+> [!NOTE]
+> **Hình dung bằng giao nhà đang xây**: tạo object = xây nhà; gán reference cho
+> biến chia sẻ = **trao chìa khóa** cho người mua. Đáng lẽ phải xây xong (set
+> `x = 42`) rồi mới trao chìa. Nhưng do reorder, JVM có thể trao chìa **trước khi**
+> sơn tường xong → người mua mở cửa vào thấy nhà còn dở (`x == 0`). `final` field
+> giống một **luật**: "không được trao chìa khi nhà chưa hoàn thiện phần `final`".
+
+Một interleaving sinh ra `x == 0`:
+
+| Bước | Thread tạo object | Thread đọc | Trạng thái |
+|------|-------------------|------------|------------|
+| 1 | cấp phát vùng nhớ cho Data (x=0 mặc định) | | x = 0 |
+| 2 | gán `shared = <ref>` (bị đẩy lên trước) | | ref đã thấy, x = 0 |
+| 3 | | thấy `shared != null`, đọc `x` → **0** ❌ | x = 0 |
+| 4 | constructor ghi `x = 42` (chạy muộn) | | x = 42 |
+
 > [!WARNING]
 > Constructor có thể chưa flush xong khi reference bị chia sẻ. Việc "tạo object
 > rồi gán cho biến chia sẻ" có thể bị reorder sao cho reference xuất hiện trước

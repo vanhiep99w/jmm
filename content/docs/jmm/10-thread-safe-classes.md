@@ -58,6 +58,30 @@ Cách làm:
 public record Point(int x, int y) { }  // immutable, thread-safe tự nhiên
 ```
 
+Ví dụ đầy đủ hơn — immutable class có list bên trong (phải copy + bọc lại):
+
+```java
+public final class ImmutableOrder {
+    private final String id;
+    private final List<String> items;   // kiểu mutable → phải bảo vệ
+
+    public ImmutableOrder(String id, List<String> items) {
+        this.id = id;
+        // copy vào để caller sửa list gốc cũng không ảnh hưởng:
+        this.items = List.copyOf(items);   // List.copyOf tạo bản unmodifiable
+    }
+
+    public String id() { return id; }
+    public List<String> items() { return items; } // đã unmodifiable, an toàn
+}
+```
+
+> [!TIP]
+> Vì sao immutable là "thread-safe miễn phí"? Không có ai ghi sau khi tạo → không
+> thể có data race (data race cần ít nhất 1 write đồng thời). Cộng thêm bảo đảm
+> `final` field ([safe publication](/jmm/07-final-field-safe-publication/)) → mọi
+> thread thấy object đã dựng xong hoàn chỉnh.
+
 ## 4. Confinement
 
 > [!NOTE]
@@ -92,6 +116,20 @@ public final class SafeRange {
     }
 }
 ```
+
+**Điều gì xảy ra nếu KHÔNG copy?** Giả sử bỏ `.clone()`:
+
+```java
+int[] data = {1, 2, 3};
+SafeRange r = new SafeRange(data);   // nếu không copy-in: r giữ CHÍNH mảng data
+data[0] = 999;                       // người ngoài sửa → state nội bộ của r bị đổi!
+// r giờ chứa {999, 2, 3} dù bạn không hề gọi method nào của r
+```
+
+Không copy-in → mảng bên trong và mảng `data` là **cùng một object**, nên bất
+biến của `SafeRange` bị người ngoài phá từ xa. Tương tự, không copy-out → caller
+nhận tham chiếu mảng thật và có thể sửa. Đây là lỗi rò rỉ đóng gói phổ biến, càng
+nguy hiểm trong môi trường đa luồng vì tạo data race ngoài tầm kiểm soát.
 
 ## 6. CAS / Atomic / Lock
 

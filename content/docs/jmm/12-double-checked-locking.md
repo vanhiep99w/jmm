@@ -79,6 +79,20 @@ DCL giúp đường "fast path" (đa số lượt gọi sau init) chỉ tốn **
 `volatile` chặn reorder này (release semantics khi ghi, acquire khi đọc) → khi
 thread khác thấy `INSTANCE != null` thì object **chắc chắn đã dựng xong**.
 
+Interleaving "DCL hỏng" khi thiếu `volatile` (giả sử object có field `config`):
+
+| Bước | Thread A (đang init) | Thread B (đọc) | INSTANCE | config |
+|------|----------------------|----------------|----------|--------|
+| 1 | cấp phát bộ nhớ (config=null) | | null | null |
+| 2 | gán `INSTANCE = <ref>` (bị đảo lên trước constructor) | | ≠ null | null |
+| 3 | | check 1: `INSTANCE != null` → bỏ qua khối khóa | ≠ null | null |
+| 4 | | dùng `INSTANCE.config` → **NPE / config null** ❌ | ≠ null | null |
+| 5 | constructor set `config = ...` (chạy muộn) | | ≠ null | đã set |
+
+Thread B "nhìn thấy" singleton nhưng đó là object **nửa vời**. `volatile` cấm
+bước 2 vượt lên trước constructor, nên B chỉ thấy `INSTANCE != null` sau khi mọi
+field đã set xong.
+
 ## 4. Initialization-on-Demand Holder (IoDH)
 
 Mẫu **tốt hơn** DCL, tận dụng cơ chế class initialization của JVM:

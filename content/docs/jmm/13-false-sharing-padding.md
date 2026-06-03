@@ -21,6 +21,15 @@ description: "False sharing do cache line dùng chung, cơ chế MESI, và cách
 thread ghi vào các biến **khác nhau** nhưng nằm chung một **cache line** → cache
 line bị "ping-pong" qua lại giữa các core.
 
+> [!NOTE]
+> **Hình dung bằng tờ giấy nhớ dùng chung**: hai nhân viên, mỗi người phụ trách
+> **một ô** trên cùng một tờ giấy nhớ (cache line). Họ ghi vào hai ô khác nhau,
+> chẳng liên quan gì nhau. Nhưng vì quy định "ai sửa tờ giấy thì phải cầm cả tờ,
+> người kia phải đợi và xin lại bản mới", nên mỗi lần một người ghi, người kia
+> phải **chờ và chép lại cả tờ**. Hai người cứ giành tờ giấy qua lại → chậm, dù
+> nội dung họ ghi hoàn toàn độc lập. Giải pháp: cho mỗi người **một tờ riêng**
+> (padding/`@Contended`).
+
 ## 1. False sharing là gì
 
 CPU hiện đại cache theo **dòng (cache line)**, thường **64 bytes**. Nếu hai (hoặc

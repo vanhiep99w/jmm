@@ -24,6 +24,15 @@ description: "Escape Analysis là gì, ba mức escape, và các tối ưu scala
 **phạm vi sống** của một object: nó có "thoát" (escape) khỏi method/thread tạo ra
 nó hay không. Nếu **không**, JIT có thể áp dụng nhiều tối ưu mạnh.
 
+> [!NOTE]
+> **Hình dung bằng giấy nháp**: bạn lấy một tờ giấy nháp để tính toán trong đầu,
+> dùng xong vứt đi — không ai khác cần nó (NoEscape). JIT thấy vậy thì **không
+> thèm cấp một tờ giấy thật** (không cấp phát heap), mà tính nhẩm luôn trong đầu
+> (register). Ngược lại, nếu bạn **đưa tờ giấy cho người khác** giữ (return, gán
+> field tĩnh, chia cho thread khác) thì nó "thoát" ra ngoài (GlobalEscape) → buộc
+> phải là giấy thật, lưu cẩn thận. EA chính là việc JIT phán đoán "tờ giấy này có
+> bị ai khác giữ không".
+
 ## 1. Escape Analysis là gì
 
 Khi JIT (HotSpot C2) biên dịch một method, nó truy vết xem reference của một

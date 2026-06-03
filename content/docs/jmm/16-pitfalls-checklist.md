@@ -19,6 +19,25 @@ description: "Tổng hợp các lỗi JMM thường gặp, cách sửa, và chec
 Bài cuối tổng hợp các lỗi JMM kinh điển và một checklist để review code đồng thời.
 Mỗi pitfall đều liên kết tới bài chi tiết tương ứng.
 
+### Tra ngược: thấy triệu chứng này thì nghi lỗi gì
+
+Khi gặp bug đồng thời, đối chiếu "triệu chứng → nghi ngờ" để khoanh vùng nhanh:
+
+| Triệu chứng quan sát được | Nghi ngờ nguyên nhân | Xem |
+|---------------------------|----------------------|-----|
+| Vòng `while(!flag){}` chạy mãi không thoát | thiếu `volatile` cho `flag` (visibility) | [Volatile](/jmm/05-volatile/) |
+| Counter ra số nhỏ hơn kỳ vọng | `count++` không atomic (lost update) | [1.1](#11-dùng-volatile-cho-read-modify-write) |
+| Thỉnh thoảng đọc field = 0/null dù đã set | reorder / unsafe publication / DCL thiếu volatile | [1.3](#13-dcl-thiếu-volatile) |
+| Lỗi chỉ xảy ra trên ARM/Apple Silicon, không thấy trên x86 | dựa vào TSO của x86, thiếu đồng bộ | [1.9](#19-giả-định-x86--đúng-mọi-nơi) |
+| Hai thread cùng tạo/ghi đè một entry | check-then-act không nguyên tử | [1.5](#15-check-then-act-không-khóa) |
+| Treo toàn bộ, không tiến triển | deadlock / quên unlock / lock sai object | [1.7](#17-quên-unlock-trong-finally) |
+| Throughput giảm khi thêm core | false sharing | [False Sharing](/jmm/13-false-sharing-padding/) |
+
+> [!NOTE]
+> **Quy tắc chẩn đoán**: "treo / không thoát" thường là **visibility** (thiếu
+> volatile); "ra sai số / mất update" thường là **atomicity** (thiếu atomic/lock);
+> "thấy object nửa vời" thường là **ordering/publication** (thiếu volatile/final).
+
 ## 1. Các pitfall thường gặp
 
 ### 1.1 Dùng volatile cho read-modify-write

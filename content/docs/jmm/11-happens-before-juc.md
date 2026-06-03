@@ -34,6 +34,29 @@ j.u.c bảo đảm visibility & ordering ("thấy dữ liệu đã dựng xong")
 bảo *khi nào* chạy hay chạy *bao lâu*. Nhiều thành phần còn cung cấp atomicity cho
 thao tác đơn (CAS) hoặc theo key (`computeIfAbsent` của CHM).
 
+### Bảng tra nhanh: ai HB ai
+
+Mỗi cặp dưới đây tạo "cây cầu HB" giống cặp volatile write→read. Vế trái xong thì
+vế phải **chắc chắn thấy** mọi thứ vế trái đã làm:
+
+| Công cụ | Hành động "release" (vế A) | Hành động "acquire" (vế B) |
+|---------|----------------------------|----------------------------|
+| Thread | `thread.start()` | việc đầu tiên trong thread mới |
+| Thread | việc cuối trong thread | `thread.join()` trả về |
+| Executor | code trước `submit(task)` | thân `task` khi chạy |
+| Future | thân task hoàn thành | `future.get()` trả về |
+| Lock | `lock.unlock()` | `lock.lock()` lần sau (cùng lock) |
+| BlockingQueue | `queue.put(x)` | `queue.take()` lấy đúng `x` |
+| CountDownLatch | `latch.countDown()` | `latch.await()` trả về |
+| Semaphore | `sem.release()` | `sem.acquire()` thành công |
+| CHM | `map.put(k, v)` | `map.get(k)` thấy `v` |
+| volatile | ghi biến volatile | đọc biến volatile đó |
+
+> [!TIP]
+> Mẹo nhớ: bất cứ chỗ nào một thread **"bàn giao"** dữ liệu/tín hiệu cho thread
+> khác qua một công cụ j.u.c, ở đó có một HB edge. Cứ tìm "điểm bàn giao" là tìm
+> được bảo đảm visibility.
+
 ## 1. Executor / Future / CompletableFuture
 
 > [!NOTE]
