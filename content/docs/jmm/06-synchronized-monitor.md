@@ -23,6 +23,13 @@ description: "Mutual exclusion với synchronized, cấu trúc monitor trong JVM
 trong critical section) và **happens-before edges** (tạo visibility/ordering). Nhờ
 vậy nó giải quyết được cả [data race lẫn race condition](/jmm/08-data-race-vs-race-condition/).
 
+> [!NOTE]
+> **Hình dung bằng nhà vệ sinh có một chìa khóa duy nhất**: chỉ ai cầm chìa (giữ
+> lock) mới vào được (mutual exclusion); người khác phải xếp hàng chờ (Entry List).
+> Quan trọng hơn: khi bạn **trả chìa** (unlock), bạn dọn dẹp sạch sẽ để lại (flush
+> ra main memory); người vào sau **cầm chìa** (lock) sẽ thấy đúng hiện trạng bạn để
+> lại (đọc dữ liệu mới nhất). "Trả chìa → cầm chìa" chính là cặp HB release/acquire.
+
 ## 1. Lock object
 
 `synchronized` dùng một object làm **điểm đồng bộ hóa trung tâm**. JVM không cho

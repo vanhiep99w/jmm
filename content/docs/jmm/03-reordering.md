@@ -10,6 +10,7 @@ description: "Reordering bởi compiler, JIT và CPU; as-if-serial, khi nào reo
 - [2. Vì sao cần reordering](#2-vì-sao-cần-reordering)
 - [3. Khi nào reorder hợp pháp](#3-khi-nào-reorder-hợp-pháp)
 - [4. Reorder gây bug như thế nào](#4-reorder-gây-bug-như-thế-nào)
+- [4b. Ví dụ kinh điển: cả hai cùng đọc 0](#4b-ví-dụ-kinh-điển-cả-hai-cùng-đọc-0)
 - [5. Chặn reorder](#5-chặn-reorder)
 - [Tài liệu tham khảo](#tài-liệu-tham-khảo)
 
@@ -35,6 +36,14 @@ graph LR
 | **Compiler (javac)** | Tối ưu hóa code, gộp/bỏ lệnh thừa, phá phụ thuộc giả, đổi thứ tự không ảnh hưởng logic đơn luồng. |
 | **JIT (HotSpot)** | Khi runtime biết nhiều hơn (kiểu biến, nhánh phổ biến) → reorder để chạy nhanh hơn. |
 | **CPU (hardware)** | Out-of-order execution: nếu lệnh A chờ dữ liệu từ RAM, CPU chạy lệnh B độc lập trước. Cache/store buffer cũng làm thao tác ghi "trông như" bị reorder từ góc nhìn core khác. |
+
+> [!NOTE]
+> **Hình dung bằng việc nấu ăn**: công thức ghi "(1) luộc mì, (2) phi hành, (3) trộn".
+> Một đầu bếp khôn ngoan thấy (1) và (2) **độc lập** nên phi hành **trong lúc** chờ
+> nước sôi — đổi thứ tự để nhanh hơn. Món ăn cuối vẫn giống hệt (as-if-serial).
+> Nhưng nếu có người **đứng ngoài nhìn** (thread khác) và dựa vào thứ tự "hành
+> phải phi sau khi mì chín", họ sẽ bối rối khi thấy hành phi trước. Đó chính là
+> reorder "vô hình trong bếp, nhưng nhìn thấy từ ngoài".
 
 ## 2. Vì sao cần reordering
 
@@ -75,6 +84,38 @@ if (flag) {   // (3)
 
 Với một thread, đảo `(1)` và `(2)` không ảnh hưởng gì. Nhưng Thread 2 có thể thấy
 `flag == true` **trước khi** `a` được ghi → in `0`. Đây là lý do cần đồng bộ.
+
+## 4b. Ví dụ kinh điển: cả hai cùng đọc 0
+
+Đây là ví dụ nổi tiếng nhất cho thấy reorder có thể quan sát được. Hai biến
+thường `x = y = 0`, hai thread:
+
+```java
+// Thread 1            // Thread 2
+x = 1;   // (1)        y = 1;   // (3)
+r1 = y;  // (2)        r2 = x;  // (4)
+```
+
+Câu hỏi: sau khi cả hai chạy xong, có thể `r1 == 0 && r2 == 0` không?
+
+- Theo trực giác "tuần tự": **không thể**. Nếu `r1 == 0` nghĩa là (2) chạy trước (3),
+  mà (1) trước (2) và (3) trước (4) → (1) chạy trước (4) → (4) phải thấy `x == 1`.
+- Thực tế: **CÓ THỂ** `r1 == 0 && r2 == 0`. Vì `(1)` và `(2)` độc lập trong
+  Thread 1 → CPU/JIT có thể đảo thành `(2)` rồi `(1)`; tương tự với Thread 2.
+
+Một interleaving cho ra `0, 0`:
+
+| Bước | Hành động (sau reorder) | x | y | r1 | r2 |
+|------|------------------------|---|---|----|----|
+| 1 | T1: `r1 = y` (đảo lên trước) | 0 | 0 | 0 | - |
+| 2 | T2: `r2 = x` (đảo lên trước) | 0 | 0 | 0 | 0 |
+| 3 | T1: `x = 1` | 1 | 0 | 0 | 0 |
+| 4 | T2: `y = 1` | 1 | 1 | 0 | 0 |
+
+> [!TIP]
+> Đây chính là test mà công cụ [jcstress](/jmm/15-testing-concurrency/) dùng để
+> "bắt quả tang" reorder. Trên x86 (TSO) kết quả `0,0` hiếm; trên ARM (weak
+> memory) nó xuất hiện thường xuyên hơn. Muốn cấm: đặt `x`, `y` là `volatile`.
 
 ## 5. Chặn reorder
 

@@ -32,6 +32,13 @@ cache tại đây"**.
 Cụ thể, một barrier đảm bảo: mọi thao tác bộ nhớ **trước** barrier phải hoàn thành
 và nhìn thấy được **trước khi** thực hiện bất kỳ thao tác bộ nhớ nào **sau** barrier.
 
+> [!NOTE]
+> **Hình dung bằng cửa an ninh sân bay**: hành khách (lệnh) bình thường có thể
+> chen lấn, vượt nhau cho nhanh. Nhưng tại **cửa kiểm tra an ninh** (barrier),
+> mọi người phải xếp hàng đúng thứ tự: ai tới trước phải qua cửa trước, và **không
+> ai** được nhảy từ bên này sang bên kia cửa. Barrier chính là cái cửa đó — nó
+> không thay đổi hành khách, chỉ ép thứ tự qua cửa và đảm bảo "đã qua thì thấy nhau".
+
 - **Dọn dẹp (invalidate)**: bỏ giá trị cũ trong cache, ép đọc từ main memory.
 - **Cập nhật (flush)**: đảm bảo khi đọc xong biến báo hiệu thì các biến liên quan
   cũng đã được load mới nhất.
@@ -104,6 +111,22 @@ Giải thích từng bước:
    bị reorder lên trước lần đọc volatile.
 
 Kết quả: Thread 2 đọc `flag == true` thì **bắt buộc** thấy `a == 1`.
+
+Nhìn theo dòng thời gian "store buffer → main memory":
+
+```mermaid
+sequenceDiagram
+    participant T1 as Thread 1 (core 0)
+    participant MM as Main memory
+    participant T2 as Thread 2 (core 1)
+    T1->>T1: a = 1 (vào store buffer)
+    Note over T1: StoreStore → flush a ra main memory
+    T1->>MM: a = 1 (đã publish)
+    T1->>MM: flag = true (volatile write, release)
+    MM->>T2: đọc flag == true (volatile read, acquire)
+    Note over T2: LoadLoad/LoadStore → load lại a mới nhất
+    MM->>T2: đọc a == 1 ✓
+```
 
 ## 5. Mapping xuống CPU
 

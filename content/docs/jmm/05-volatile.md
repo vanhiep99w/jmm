@@ -79,6 +79,36 @@ void increment() {
 tác nguyên tử. Hai thread có thể đọc cùng một giá trị, cộng lên, rồi ghi lại →
 **lost update**. Đúng: dùng `AtomicInteger.incrementAndGet()`.
 
+Chương trình chạy thử (copy chạy được) cho thấy “mất số”:
+
+```java
+public class VolatileCounterDemo {
+    static volatile int counter = 0;   // volatile nhưng vẫn sai
+
+    public static void main(String[] args) throws InterruptedException {
+        Runnable job = () -> { for (int i = 0; i < 100_000; i++) counter++; };
+        Thread t1 = new Thread(job), t2 = new Thread(job);
+        t1.start(); t2.start();
+        t1.join();  t2.join();
+        System.out.println(counter); // KỲ VỌNG 200000, THỰC TẾ thường < 200000
+    }
+}
+```
+
+Vì sao mất số? `counter++` gồm 3 bước, hai thread xen vào nhau:
+
+| Bước | Thread 1 | Thread 2 | counter |
+|------|----------|----------|---------|
+| 1 | đọc counter → 10 | | 10 |
+| 2 | | đọc counter → 10 | 10 |
+| 3 | tính 10+1 = 11 | | 10 |
+| 4 | | tính 10+1 = 11 | 10 |
+| 5 | ghi 11 | | 11 |
+| 6 | | ghi 11 (đè lên) | 11 ❌ (lẽ ra phải 12) |
+
+Hai lần `++` nhưng counter chỉ tăng 1 → **lost update**. Đổi `counter` sang
+`AtomicInteger` và dùng `incrementAndGet()` thì luôn ra đúng `200000`.
+
 ### 4.2 "Publish" object qua volatile field của chính object
 
 ```java
@@ -100,6 +130,12 @@ nguyên tử. Thread khác có thể đọc `p` khi `x` đã đổi nhưng `y` c
 > Muốn publish một object bất biến an toàn → dùng `final` field +
 > [safe publication](/jmm/07-final-field-safe-publication/), hoặc gán một
 > **object mới (immutable)** vào biến volatile thay vì sửa field tại chỗ.
+
+> [!NOTE]
+> **Hình dung volatile**: giống việc bắt buộc "ghi thẳng lên bảng thông báo chung"
+> thay vì ghi vào sổ tay riêng. Ai cũng đọc được giá trị mới nhất (visibility). Nhưng
+> nó **không** khóa bảng — hai người vẫn có thể cùng đọc "10", cùng viết đè "11"
+> (mất update). Muốn "khóa bảng khi sửa" thì cần lock hoặc CAS.
 
 ## 5. Khi nào nên dùng volatile
 

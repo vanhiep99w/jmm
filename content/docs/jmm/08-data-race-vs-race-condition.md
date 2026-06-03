@@ -69,6 +69,30 @@ void inc() {
 cùng đọc giá trị cũ → mất update. Đây là race condition **không** phải data race
 (vì có visibility). **Fix**: `AtomicInteger.incrementAndGet()` hoặc `synchronized`.
 
+### Ví dụ đời thường: rút tiền hai cây ATM cùng lúc
+
+Tài khoản còn `100k`. Hai người cùng rút `100k` ở hai cây ATM (hai thread):
+
+```java
+void withdraw(int amount) {
+    if (balance >= amount) {   // (1) CHECK
+        balance -= amount;     // (2) ACT
+    }
+}
+```
+
+| Bước | ATM A (rút 100k) | ATM B (rút 100k) | balance |
+|------|------------------|------------------|---------|
+| 1 | check `100 >= 100` ✅ | | 100 |
+| 2 | | check `100 >= 100` ✅ | 100 |
+| 3 | `balance -= 100` → 0 | | 0 |
+| 4 | | `balance -= 100` → -100 | **-100** ❌ |
+
+Cả hai đều "thấy" đủ tiền nên cùng rút → tài khoản âm. Đây là **race condition**
+kiểu *check-then-act*: dù `balance` có là `volatile` (visibility tốt) vẫn sai, vì
+khoảng giữa CHECK và ACT bị thread khác xen vào. **Fix**: bọc cả `if + trừ tiền`
+trong `synchronized`/`Lock`, hoặc dùng CAS để "kiểm tra và trừ" thành một bước.
+
 ## 3. Quan hệ giữa hai khái niệm
 
 ```mermaid

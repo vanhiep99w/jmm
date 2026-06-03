@@ -22,6 +22,14 @@ Test code đồng thời **không** giống test code tuần tự: bug chỉ l�
 tự thực thi hiếm gặp, trên một CPU nhất định, dưới một mức tải nhất định. Cần công
 cụ chuyên dụng (jcstress, Lincheck) và phương pháp đo đúng (JMH).
 
+> [!NOTE]
+> **Hình dung bằng việc bắt lỗi đèn giao thông**: một ngã tư có lỗi hiếm — chỉ kẹt
+> khi hai xe tới **đúng cùng một phần nghìn giây**. Bạn đứng quay phim 5 phút (unit
+> test thường) gần như **không bao giờ** thấy lỗi. Muốn bắt được, phải cho **hàng
+> triệu lượt xe** đi qua với đủ kiểu thời điểm (jcstress), hoặc **dựng mô hình** mọi
+> khả năng giao cắt rồi kiểm tra bằng lý thuyết (Lincheck model checking). Test
+> "pass" chỉ nghĩa là "chưa thấy tai nạn", không phải "ngã tư an toàn".
+
 ## 1. Vì sao test concurrency khó
 
 - **Không xác định (non-deterministic)**: cùng một test chạy 1 triệu lần có thể

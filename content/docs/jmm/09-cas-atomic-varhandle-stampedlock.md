@@ -39,6 +39,13 @@ Một thao tác **atomic** nghĩa là:
 **Compare-And-Set** (hay Compare-And-Swap) là primitive được CPU hỗ trợ để cập
 nhật dữ liệu theo điều kiện một cách nguyên tử.
 
+> [!NOTE]
+> **Hình dung bằng sửa Google Docs**: bạn mở tài liệu ở "phiên bản 5", soạn
+> bản sửa. Khi bấm Lưu, hệ thống kiểm tra: "tài liệu **vẫn** ở phiên bản 5 chứ?"
+> Nếu đúng → lưu thành phiên bản 6 (CAS thành công). Nếu ai đó đã lưu trước (giờ
+> là phiên bản 6) → từ chối, bạn phải tải bản mới và soạn lại (CAS thất bại → lặp
+> lại). Đây chính là *optimistic locking*: không khóa trước, chỉ kiểm tra lúc ghi.
+
 ```java
 CAS(address, expectedValue, newValue):
     // 1. Đọc giá trị tại address
@@ -179,6 +186,34 @@ class Service {
 
 Giá trị đổi từ A → B → A. CAS thấy "vẫn là A" nên thành công, nhưng thực tế giá
 trị đã bị thay đổi giữa chừng → có thể sai logic.
+
+> [!NOTE]
+> **Hình dung ABA bằng cốc cà phê**: bạn để cốc cà phê đầy trên bàn (A) rồi đi nghì.
+> Ai đó uống hết (B) rồi rót đầy lại đúng mức cũ (A). Bạn quay lại, **nhìn thấy
+> cốc vẫn đầy** nên nghĩ "không ai động vào" và uống tiếp — nhưng đây đã là cà phê
+> khác. CAS kiểu `==` cũng bị lừa y hệt. Giải pháp: dán **số thứ tự** lên cốc (stamp)
+> — dù mức cà phê giống nhau, số thứ tự đã tăng nên bạn biết nó đã bị thay.
+
+Mô tả bằng code: một stack lock-free bị ABA khi pop:
+
+```text
+Stack: A -> B -> C   (top = A)
+T1: chuẩn bị pop A, tính "top mới sẽ là B", nhưng bị tạm dừng
+T2: pop A (top=B), pop B (top=C), rồi push lại A (top=A, nhưng A.next giờ là C)
+T1: tiếp tục: CAS(top: A -> B) thấy top vẫn == A → THÀNH CÔNG (sai!)
+    → top giờ = B, nhưng B đã bị pop từ lâu → corrupt
+```
+
+Fix bằng `AtomicStampedReference` (so sánh cả giá trị lẫn stamp):
+
+```java
+AtomicStampedReference<Node> top = new AtomicStampedReference<>(A, 0);
+int[] stampHolder = new int[1];
+Node t = top.get(stampHolder);          // đọc cả ref + stamp
+int stamp = stampHolder[0];
+// chỉ thành công nếu CẢ ref lẫn stamp đều khớp → chặn được ABA
+top.compareAndSet(t, t.next, stamp, stamp + 1);
+```
 
 > [!NOTE]
 > Chống ABA: dùng `AtomicStampedReference<T>` (gắn thêm stamp/version) hoặc

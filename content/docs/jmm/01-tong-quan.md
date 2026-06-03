@@ -8,6 +8,7 @@ description: "Java Memory Model là gì, giải quyết vấn đề gì, và ba 
 - [Tổng quan](#tổng-quan)
 - [1. JMM là gì](#1-jmm-là-gì)
 - [2. Vì sao cần JMM](#2-vì-sao-cần-jmm)
+- [Ví dụ đời thường: hai cái bảng trắng](#ví-dụ-đời-thường-hai-cái-bảng-trắng)
 - [3. Ba vấn đề cốt lõi](#3-ba-vấn-đề-cốt-lõi)
   - [3.1 Visibility (tính hiển thị)](#31-visibility-tính-hiển-thị)
   - [3.2 Ordering (thứ tự)](#32-ordering-thứ-tự)
@@ -42,6 +43,13 @@ hoặc thấy theo thứ tự "lạ".
 JMM định nghĩa các quy tắc để kiểm soát những điều này, mà cốt lõi là quan hệ
 [happens-before](/jmm/02-happens-before/).
 
+> [!NOTE]
+> **Hình dung nhanh**: mỗi CPU core như một nhân viên có **cuốn sổ tay riêng**
+> (cache/registers). Họ thường ghi nháp vào sổ tay cho nhanh, thỉnh thoảng mới
+> chép lên **bảng chung** (main memory). Nếu không có quy định "khi nào phải chép
+> lên bảng và khi nào phải đọc lại từ bảng", hai nhân viên sẽ thấy hai phiên bản
+> số liệu khác nhau. JMM chính là bản **quy định** đó.
+
 ## 2. Vì sao cần JMM
 
 Hãy xét đoạn code tưởng chừng vô hại sau:
@@ -67,6 +75,48 @@ có JMM guarantee** ở đây vì `x` và `ready` đều là biến thường:
 
 JMM tồn tại để cho bạn các công cụ (`volatile`, `synchronized`, ...) biến những
 giả định trực giác này thành **bảo đảm chính thức**.
+
+### Chạy thử để thấy bug (đầy đủ, copy chạy được)
+
+```java
+public class VisibilityDemo {
+    static int x = 0;
+    static boolean ready = false;   // KHÔNG volatile → có thể kẹt
+
+    public static void main(String[] args) throws InterruptedException {
+        Thread writer = new Thread(() -> {
+            x = 42;
+            ready = true;           // (A)
+        });
+        Thread reader = new Thread(() -> {
+            while (!ready) { }      // (B) có thể chạy mãi không thoát
+            System.out.println(x);  // (C) có thể in 0, có thể in 42
+        });
+        reader.start();
+        writer.start();
+        writer.join();
+        reader.join();
+    }
+}
+```
+
+> [!WARNING]
+> Trên nhiều JVM/CPU (đặc biệt khi bật JIT `-server`), `reader` có thể **treo vô
+> hạn** ở dòng (B): nó đọc `ready` từ cache của core nó và **không bao giờ** thấy
+> giá trị `true` mà `writer` đã ghi. Đây không phải bug của bạn — đây là điều JMM
+> **cho phép** vì `ready` không được đồng bộ. Chỉ cần đổi thành
+> `volatile boolean ready` là vòng lặp thoát ngay và `x` chắc chắn in `42`.
+
+**Vì sao có thể in `0`?** Kể cả khi (B) thoát, hai lệnh trong `writer` có thể bị
+[reorder](/jmm/03-reordering/) thành `ready = true;` **trước** `x = 42;`. Lúc đó
+`reader` thấy `ready == true` nhưng `x` vẫn là `0`:
+
+| Bước | writer | reader | x | ready |
+|------|--------|--------|---|-------|
+| 1 | `ready = true` (bị đảo lên trước) | | 0 | true |
+| 2 | | thấy `ready==true`, thoát vòng lặp | 0 | true |
+| 3 | | `print(x)` → **in 0** ❌ | 0 | true |
+| 4 | `x = 42` (chạy muộn) | | 42 | true |
 
 ## 3. Ba vấn đề cốt lõi
 

@@ -27,6 +27,13 @@ description: "Quan hệ happens-before, so sánh với program order, và đầy
 HB là **khái niệm trung tâm của toàn bộ JMM**. Gần như mọi bảo đảm về đồng bộ đều
 được phát biểu dưới dạng "X happens-before Y".
 
+> [!NOTE]
+> **Hình dung bằng chạy tiếp sức**: HB giống việc **trao gậy** trong chạy tiếp
+> sức. Vận động viên A phải hoàn tất phần của mình **rồi mới trao gậy** cho B; B
+> chỉ chạy **sau khi** nhận gậy. Nhờ "điểm trao gậy" đó, mọi thứ A làm **chắc chắn**
+> đã xong và B nhìn thấy. Nếu **không có** điểm trao gậy (không đồng bộ), hai người
+> chạy độc lập — B có thể xuất phát khi A chưa làm gì, hoặc không thấy kết quả của A.
+
 ## 1. Happens-before là gì
 
 Điểm cốt lõi cần nhớ: HB **không** có nghĩa "A chạy trước B theo thời gian thực".
@@ -78,6 +85,23 @@ Happens-before:
 > Mẹo đọc HB: tìm một **cặp release/acquire** (ví dụ volatile write → volatile
 > read trên cùng biến). Cặp đó tạo "cây cầu" HB, rồi dùng program order ở hai đầu
 > cầu để suy ra visibility cho các biến thường xung quanh.
+
+Đây là "cây cầu HB" nhìn bằng sơ đồ: biến `b` (volatile) là nhịp cầu, còn biến
+thường `a` "quá giang" qua cầu đó:
+
+```mermaid
+graph LR
+    subgraph T1[Thread 1]
+        A1["(1) a = 1 (biến thường)"] --> A2["(2) b = true (volatile WRITE = release)"]
+    end
+    subgraph T2[Thread 2]
+        B1["(3) đọc b == true (volatile READ = acquire)"] --> B2["(4) print(a) → thấy 1"]
+    end
+    A2 -->|"HB edge qua volatile b"| B1
+```
+
+Khi (3) đọc thấy `b == true`, mọi thứ ghi **trước** (2) ở Thread 1 (gồm cả
+`a = 1`) đều được Thread 2 nhìn thấy — đó là ý nghĩa "quá giang qua cầu".
 
 ## 4. Các HB rules quan trọng
 
