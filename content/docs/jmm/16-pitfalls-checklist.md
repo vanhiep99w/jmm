@@ -171,4 +171,4 @@ graph TD
 - *Java Concurrency in Practice* — Brian Goetz
 - [JLS Chapter 17 — Threads and Locks](https://docs.oracle.com/javase/specs/jls/se21/html/jls-17.html)
 - Trước: [Testing concurrency](/jmm/15-testing-concurrency/)
-- Quay lại: [Tổng quan JMM](/jmm/01-tong-quan/)
+- Tiếp theo: [Sequential Consistency & SC-DRF](/jmm/17-sequential-consistency-drf/)

@@ -16,6 +16,12 @@
     "13-false-sharing-padding",
     "14-escape-analysis",
     "15-testing-concurrency",
-    "16-pitfalls-checklist"
+    "16-pitfalls-checklist",
+    "17-sequential-consistency-drf",
+    "18-long-double-word-tearing",
+    "19-out-of-thin-air-causality",
+    "20-varhandle-access-modes-fences",
+    "21-jsr133-history-cpp-comparison",
+    "22-reachability-fence-gc-ordering"
   ]
 }
