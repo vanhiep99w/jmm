@@ -11,9 +11,9 @@
   --fd-layout-width: 100vw;
 }
 
-/* Keep the article wide and reduce Fumadocs' desktop side padding. */
+/* Let the article sit close to the sidebar and TOC with compact padding. */
 #nd-page {
-  max-width: 1200px;
+  max-width: none;
   padding-inline: clamp(1rem, 1.5vw, 1.25rem);
 }
 
