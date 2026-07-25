@@ -6,9 +6,15 @@
   --fd-font-mono: 'JetBrains Mono', monospace;
 }
 
-/* Wider content area */
-#nd-page article {
-  max-width: none;
+/* Use the full viewport for the three-column docs layout. */
+#nd-docs-layout {
+  --fd-layout-width: 100vw;
+}
+
+/* Keep the article wide and reduce Fumadocs' desktop side padding. */
+#nd-page {
+  max-width: 1200px;
+  padding-inline: clamp(1rem, 1.5vw, 1.25rem);
 }
 
 /* Vietnamese text readability */
