@@ -209,6 +209,41 @@ volatile write/read trên `flag` tạo cầu visibility cho các dữ liệu đ�
 đó. Nếu Thread 2 đọc `a` trước khi thấy `flag == true`, hoặc `a` tiếp tục bị nhiều
 thread ghi đồng thời, kết luận này không còn áp dụng.
 
+### 6. Bảo đảm này chỉ đi một chiều
+
+Bảo đảm chính xác của ví dụ là:
+
+```text
+Thread 2 đọc flag == true
+        ⇒
+Thread 2 đọc a sau đó chắc chắn thấy a == 1
+```
+
+Chiều ngược lại **không được đảm bảo**:
+
+```text
+Thread 2 đọc a == 1
+        ⇏
+Thread 2 đọc flag == true
+```
+
+Ví dụ, Thread 1 có thể bị tạm dừng giữa hai phép ghi:
+
+```text
+Thread 1: a = 1;
+          // tạm dừng trước khi ghi flag
+
+Thread 2: int x = a;        // x có thể là 1
+          boolean f = flag; // f vẫn có thể là false
+
+Thread 1: flag = true;
+```
+
+Lý do là volatile release/acquire tạo cầu visibility từ các thao tác **trước
+volatile write** tới các thao tác **sau volatile read**. Nó không tạo cầu ngược từ
+việc đọc `a` sang `flag`. Nếu đọc được `flag == false`, ví dụ không đưa ra cam kết
+nào về giá trị nhìn thấy của `a`; `a` có thể vẫn là `0` hoặc đã là `1`.
+
 Sơ đồ dưới đây dùng “main memory” để dễ hình dung; đây là mô hình minh họa, không
 phải cam kết về một thao tác flush vật lý cụ thể:
 
