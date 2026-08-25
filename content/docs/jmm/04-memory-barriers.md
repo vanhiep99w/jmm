@@ -71,61 +71,159 @@ JMM **không** định nghĩa barrier trực tiếp. Nhưng khi bạn dùng `vol
 
 ## 4. Ví dụ: JMM xử lý volatile
 
-Đoạn code gốc:
+Đoạn code minh họa dưới đây giả sử `a` và `flag` là **field dùng chung** của cùng
+một object. `volatile` không thể khai báo cho biến local trong một method.
 
 ```java
-// Thread 1
-a = 1;                        // normal write
-volatile boolean flag = true; // volatile write
+class Example {
+    private int a = 0;                    // plain field
+    private volatile boolean flag = false; // shared flag
 
-// Thread 2
-if (flag) {                   // volatile read
-    print(a);
+    // Thread 1
+    void publish() {
+        a = 1;       // normal write
+        flag = true; // volatile write
+    }
+
+    // Thread 2
+    void consume() {
+        if (flag) {  // volatile read
+            System.out.println(a); // chắc chắn in 1
+        }
+    }
 }
 ```
 
-JVM sẽ chèn barrier như sau:
+Giả sử Thread 1 chỉ ghi `a` và `flag` một lần, Thread 2 chỉ đọc chúng, và Thread 2
+đã đọc được `flag == true`. Khi đó JVM có thể được hình dung như sau:
 
 ```java
 // Thread 1
 a = 1;            // normal write
-// [StoreStore]   <- chèn TRƯỚC volatile write: ép ghi a=1 ra main memory trước
-flag = true;      // volatile write
-// [StoreLoad]    <- chèn SAU volatile write: chặn load sau nhảy lên trước
+// [StoreStore]   <- các store trước phải đứng trước volatile store
+flag = true;      // volatile write (release)
+// [StoreLoad]    <- các load sau không được chạy trước volatile write
 
 // Thread 2
-if (flag) {       // volatile read
-    // [LoadLoad]  <- chặn đọc sau nhảy lên trước volatile read
-    // [LoadStore] <- chặn ghi sau nhảy lên trước volatile read
-    print(a);     // chắc chắn thấy a == 1
+if (flag) {       // volatile read (acquire)
+    // [LoadLoad]  <- các load sau không được chạy trước volatile read
+    // [LoadStore] <- các store sau không được chạy trước volatile read
+    print(a);     // đọc a sau khi đã thấy flag == true
 }
 ```
 
-Giải thích từng bước:
+Các barrier trong hình là **mô hình logic** để giải thích semantics; chúng không phải
+là các dòng Java mà ta tự chèn, và JVM không nhất thiết phát ra đúng bốn lệnh fence
+riêng biệt trên mọi CPU.
 
-1. **`StoreStore` trước volatile write**: yêu cầu mọi ghi thường trước đó (ở đây là
-   `a = 1`) phải được publish ra main memory trước.
-2. **`StoreLoad` sau volatile write**: ngăn các load sau bị đẩy lên trước lệnh ghi
-   `flag`.
-3. **`LoadLoad` + `LoadStore` sau volatile read**: ngăn các đọc/ghi sau `if (flag)`
-   bị reorder lên trước lần đọc volatile.
+### 1. Trước hết, điều gì có thể sai?
 
-Kết quả: Thread 2 đọc `flag == true` thì **bắt buộc** thấy `a == 1`.
+Nếu `flag` cũng là biến thường, CPU/compiler có thể làm cho phép ghi `flag = true`
+được thread khác quan sát trước khi phép ghi `a = 1` được quan sát. Đây là thứ tự
+quan sát có thể xảy ra:
 
-Nhìn theo dòng thời gian "store buffer → main memory":
+```text
+Thread 1:  flag = true  ──đã nhìn thấy──>  Thread 2
+           a = 1        ──chưa publish──>
+Thread 2:  thấy flag == true, nhưng đọc a == 0
+```
+
+Trong source code, `a = 1` được viết trước `flag = true`, nhưng khi không có cơ chế
+đồng bộ thì thứ tự viết trong source không đủ để tạo ra thứ tự nhìn thấy giữa hai
+thread.
+
+### 2. `StoreStore` trước volatile write làm gì?
+
+`StoreStore` là rào chắn giữa **store trước** và **store sau** nó:
+
+```text
+store a = 1  ──StoreStore──>  store flag = true
+```
+
+Nó ngăn compiler/CPU sắp xếp volatile store lên trước các store thường trước đó.
+Nói cách khác, JVM phải duy trì quy tắc publish:
+
+> Không được để `flag = true` trở thành tín hiệu công khai trước khi việc ghi `a = 1`
+> đã đứng trước nó trong thứ tự bộ nhớ.
+
+Cụm “ghi ra main memory” trong sơ đồ chỉ là cách hình dung. JMM không quy định một
+“main memory” cụ thể hay bắt JVM phải flush cache bằng một lệnh cụ thể; điều JMM cần
+là các thread quan sát được thứ tự và visibility phù hợp. `StoreStore` cũng không tự
+đọc hộ `a` cho Thread 2 và không phải là lock.
+
+### 3. Volatile write `flag = true` làm gì?
+
+Một volatile write có **release semantics**. Nó phát hành (publish) các thao tác bộ
+nhớ trước nó, ở đây gồm `a = 1`. Vì vậy, trong mô hình JMM, ta có:
+
+```text
+a = 1  -- program order / happens-before -->  flag = true
+```
+
+`StoreStore` trong bảng chỉ là cách mô tả phần ordering này ở mức barrier. Ta không
+nên hiểu là code Java tự thực hiện thêm một phép ghi `a`.
+
+`StoreLoad` sau volatile write ngăn một **load về sau** bị đẩy lên trước volatile
+write. Trong ví dụ tối giản này Thread 1 không có load nào sau `flag = true`, nên
+`StoreLoad` không trực tiếp tạo ra kết quả `a == 1`; nó là một phần của mapping tổng
+quát cho volatile write và có ý nghĩa khi phía sau còn phép đọc khác.
+
+### 4. Thread 2 đọc volatile như thế nào?
+
+`if (flag)` là volatile read, có **acquire semantics**. Khi lần đọc này thấy
+`true` do lần ghi của Thread 1 công bố, các thao tác sau nó không được chạy trước
+lần đọc `flag`:
+
+- `LoadLoad`: các phép đọc sau (đặc biệt là đọc `a`) phải đứng sau volatile read.
+- `LoadStore`: các phép ghi sau cũng phải đứng sau volatile read.
+
+Vì thế lời gọi `System.out.println(a)` đọc `a` **sau khi** Thread 2 đã thấy
+`flag == true`.
+
+### 5. Vì sao Thread 2 chắc chắn thấy `a == 1`?
+
+Mấu chốt là chuỗi **happens-before** sau đây:
+
+```text
+Thread 1: a = 1
+              │ program order
+              ▼
+Thread 1: flag = true (volatile write)
+              │ synchronizes-with
+              ▼
+Thread 2: đọc flag == true (volatile read)
+              │ program order
+              ▼
+Thread 2: đọc a / print(a)
+```
+
+Quan hệ `happens-before` có tính bắc cầu, nên:
+
+```text
+a = 1  happens-before  lần đọc a của Thread 2
+```
+
+Nếu không có một phép ghi khác vào `a` chen vào giữa, lần đọc đó bắt buộc thấy `1`.
+`a` không cần khai báo `volatile` trong **mẫu publish một lần** này; chính cặp
+volatile write/read trên `flag` tạo cầu visibility cho các dữ liệu được ghi trước
+đó. Nếu Thread 2 đọc `a` trước khi thấy `flag == true`, hoặc `a` tiếp tục bị nhiều
+thread ghi đồng thời, kết luận này không còn áp dụng.
+
+Sơ đồ dưới đây dùng “main memory” để dễ hình dung; đây là mô hình minh họa, không
+phải cam kết về một thao tác flush vật lý cụ thể:
 
 ```mermaid
 sequenceDiagram
     participant T1 as Thread 1 (core 0)
-    participant MM as Main memory
+    participant MM as Bộ nhớ dùng chung (minh họa)
     participant T2 as Thread 2 (core 1)
-    T1->>T1: a = 1 (vào store buffer)
-    Note over T1: StoreStore → flush a ra main memory
-    T1->>MM: a = 1 (đã publish)
-    T1->>MM: flag = true (volatile write, release)
-    MM->>T2: đọc flag == true (volatile read, acquire)
-    Note over T2: LoadLoad/LoadStore → load lại a mới nhất
-    MM->>T2: đọc a == 1 ✓
+    T1->>T1: a = 1 (plain write)
+    Note over T1: release/StoreStore: a được đặt trước flag
+    T1->>MM: flag = true (volatile write)
+    Note over MM: volatile write publish các write trước đó
+    MM->>T2: đọc flag == true (volatile read)
+    Note over T2: acquire/LoadLoad + LoadStore
+    T2->>MM: đọc a == 1 ✓
 ```
 
 ## 5. Mapping xuống CPU
