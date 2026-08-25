@@ -43,6 +43,34 @@ synchronized (lock) {
 }
 ```
 
+### Lock object không khóa toàn bộ object
+
+`lock` ở đây chỉ là **monitor/chiếc chìa khóa**, không phải lệnh khóa mọi
+method hoặc field của một object. JVM chỉ chặn các thread cùng cố acquire chính
+monitor đó:
+
+```java
+class Counter {
+    private final Object lock = new Object();
+    private int value;
+
+    void increment() {
+        synchronized (lock) {
+            value++;
+        }
+    }
+
+    void print() {
+        System.out.println(value); // không tự động bị chặn
+    }
+}
+```
+
+Các lời gọi `increment()` đồng thời sẽ lần lượt vào block vì cùng dùng `lock`,
+nhưng `print()` vẫn có thể chạy song song. Vì vậy lock chỉ bảo vệ dữ liệu khi
+mọi đường truy cập liên quan cùng tuân thủ quy ước lock; nó không biến toàn bộ
+object thành vùng độc quyền.
+
 Lock có thể là bất kỳ object nào, nhưng **tránh**:
 
 - `this` nếu class bị lộ ra ngoài (code khác có thể "vô tình" lock chung).
@@ -61,7 +89,9 @@ Lock có thể là bất kỳ object nào, nhưng **tránh**:
 
 ## 2. synchronized trên method
 
-`synchronized` trên method instance sẽ lock object `this`:
+`synchronized` trên method instance sẽ lock object `this`. Nó không phải là
+một loại lock gắn với method; monitor vẫn gắn với object, còn phạm vi giữ lock là
+**toàn bộ thân method**:
 
 ```java
 class Demo {
@@ -69,6 +99,19 @@ class Demo {
     public void bar() { /* ... */ }              // KHÔNG lock
 }
 ```
+
+Về ý nghĩa, `foo()` tương đương với:
+
+```java
+public void foo() {
+    synchronized (this) {
+        /* ... */
+    }
+}
+```
+
+Tương tự, `static synchronized` sẽ lock trên `Demo.class`, không phải trên một
+instance cụ thể.
 
 | Lời gọi | Kết quả |
 |---------|---------|
