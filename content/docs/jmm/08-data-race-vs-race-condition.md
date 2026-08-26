@@ -17,9 +17,20 @@ description: "Phân biệt data race và race condition, ví dụ minh họa, v�
 
 ## Tổng quan
 
-Hai thuật ngữ thường bị nhầm lẫn. **Data race** là khái niệm hẹp, định nghĩa
-chính xác theo JMM. **Race condition** rộng hơn, là khái niệm về tính đúng đắn
-logic. Hiểu rõ khác biệt giúp chọn đúng công cụ sửa lỗi.
+Hai thuật ngữ thường bị nhầm lẫn:
+
+- **Data race** là vấn đề ở tầng **bộ nhớ/JMM**: hai thread đụng vào cùng một
+  biến xung đột nhưng không có `happens-before`.
+- **Race condition** là vấn đề ở tầng **logic**: kết quả đúng/sai phụ thuộc vào
+  thứ tự các thread chạy.
+
+Mẹo phân biệt:
+
+1. Có truy cập đọc/ghi cùng biến mà thiếu `happens-before` không? → **data race**.
+2. Đổi thứ tự chạy có thể làm kết quả sai khác không? → **race condition**.
+
+Vì vậy, data race là khái niệm hẹp hơn; race condition bao quát cả lỗi đồng bộ
+bộ nhớ và lỗi ghép nhiều thao tác không nguyên tử.
 
 ## 1. Data race (theo JMM)
 
@@ -27,7 +38,10 @@ logic. Hiểu rõ khác biệt giúp chọn đúng công cụ sửa lỗi.
 > **Data race** xảy ra khi hai (hoặc nhiều) thread truy cập **cùng một biến**,
 > **ít nhất một** là write, và **không có happens-before** giữa các truy cập đó.
 
-Hệ quả: thread đọc có thể không thấy dữ liệu của thread ghi.
+Không phải cứ hai thread cùng dùng một biến là data race: hai lần đọc không xung
+đột; còn nếu các truy cập xung đột được sắp thứ tự bằng cơ chế đồng bộ thì đã có
+`happens-before` giữa chúng. Một hệ quả thường gặp của data race là thread đọc
+thấy giá trị cũ hoặc thấy các ghi không theo thứ tự mong đợi.
 
 ```java
 int x = 0;            // biến thường
@@ -52,22 +66,51 @@ concurrent → tạo HB edge.
 
 > [!IMPORTANT]
 > **Race condition** = kết quả **logic** phụ thuộc vào thứ tự thực thi giữa các
-> thread. Nó bao trùm cả data race **lẫn** các tình huống logic-phối-hợp khác
-> (kể cả khi đã có visibility nhưng thiếu mutual exclusion).
+> thread. Nó rộng hơn data race: lỗi có thể nằm ở việc ghép nhiều thao tác riêng
+> lẻ, dù từng thao tác đã có visibility hoặc atomic ở mức riêng.
 
-Ví dụ check-then-act / read-modify-write — đã `volatile` nhưng vẫn sai:
+Ví dụ lost update — đã dùng `volatile` nhưng vẫn sai:
 
 ```java
 volatile int counter = 0;
 
 void inc() {
-    counter++;   // read-modify-write, KHÔNG atomic → lost update
+    counter++;   // read -> add -> write, KHÔNG atomic
 }
 ```
 
-`volatile` đảm bảo visibility nhưng `counter++` vẫn là 3 bước → hai thread có thể
-cùng đọc giá trị cũ → mất update. Đây là race condition **không** phải data race
-(vì có visibility). **Fix**: `AtomicInteger.incrementAndGet()` hoặc `synchronized`.
+Thực tế, `counter++` gồm 3 bước:
+
+```text
+1. đọc counter
+2. cộng thêm 1
+3. ghi lại counter
+```
+
+`volatile` giúp mỗi lần đọc/ghi có visibility và ordering, nhưng không biến cả 3
+bước thành một thao tác. Hai thread có thể cùng đọc `0`, rồi lần lượt ghi `1`; kết
+quả là `1` thay vì `2`. Đây là **race condition** kiểu lost update. Đừng hiểu
+`volatile` là giải pháp cho mọi race: nó không giải quyết tính atomic của một
+chuỗi thao tác. **Fix**: `AtomicInteger.incrementAndGet()` hoặc `synchronized`.
+
+Race condition thậm chí vẫn có thể xảy ra khi dùng một biến nguyên tử, nếu tách
+`check` và `act` thành hai thao tác:
+
+```java
+AtomicInteger stock = new AtomicInteger(1);
+
+boolean buy() {
+    if (stock.get() > 0) {       // CHECK
+        stock.decrementAndGet(); // ACT
+        return true;
+    }
+    return false;
+}
+```
+
+Hai thread đều có thể vượt qua `CHECK` rồi cùng `ACT`. Các thao tác của
+`AtomicInteger` tự chúng là atomic, nhưng cả cặp `CHECK + ACT` chưa atomic. Cần
+CAS để gộp chúng thành một thao tác hoặc dùng `synchronized`/`Lock`.
 
 ### Ví dụ đời thường: rút tiền hai cây ATM cùng lúc
 
@@ -105,14 +148,15 @@ graph TD
 ```
 
 > [!NOTE]
-> **Mọi data race đều là race condition**, nhưng **race condition không nhất thiết
-> là data race** (ví dụ: check-then-act không khóa, dù đã có visibility).
+> Data race thường được xem là một dạng race condition ở tầng memory, nhưng
+> **race condition không nhất thiết là data race** (ví dụ: check-then-act không
+> khóa, dù từng lần đọc/ghi đã có visibility).
 
 | Sửa bằng | Diệt data race? | Diệt race condition logic? |
 |----------|-----------------|----------------------------|
-| `volatile` | ✅ | ❌ (vẫn lost update) |
-| `synchronized` / `Lock` | ✅ | ✅ |
-| `Atomic*` / CAS | ✅ | ✅ (cho thao tác đơn biến) |
+| `volatile` | ✅ cho visibility/publication đơn giản | ❌ (vẫn lost update) |
+| `synchronized` / `Lock` | ✅ nếu mọi access dùng cùng lock | ✅ |
+| `Atomic*` / CAS | ✅ cho operation được atomic hóa | ✅ nếu gộp đúng cả check + update |
 
 ## 4. Benign vs Harmful races
 
