@@ -12,6 +12,7 @@
     "09-cas-atomic-varhandle-stampedlock",
     "10-thread-safe-classes",
     "11-happens-before-juc",
+    "11a-lock-interface",
     "12-double-checked-locking",
     "13-false-sharing-padding",
     "14-escape-analysis",

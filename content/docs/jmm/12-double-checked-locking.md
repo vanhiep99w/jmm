@@ -137,5 +137,5 @@ tự nhiên. JVM đảm bảo class initialization là thread-safe và object đ
 ## Tài liệu tham khảo
 
 - [JSR-133 FAQ — Double-Checked Locking is broken](https://www.cs.umd.edu/~pugh/java/memoryModel/DoubleCheckedLocking.html)
-- Trước: [Happens-before trong java.util.concurrent](/jmm/11-happens-before-juc/)
+- Trước: [Lock interface & ReentrantLock](/jmm/11a-lock-interface/)
 - Tiếp theo: [False sharing & padding](/jmm/13-false-sharing-padding/)

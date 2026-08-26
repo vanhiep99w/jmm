@@ -32,7 +32,9 @@ tự, và đảm bảo visibility/ordering.
 
 j.u.c bảo đảm visibility & ordering ("thấy dữ liệu đã dựng xong"), **không** đảm
 bảo *khi nào* chạy hay chạy *bao lâu*. Nhiều thành phần còn cung cấp atomicity cho
-thao tác đơn (CAS) hoặc theo key (`computeIfAbsent` của CHM).
+thao tác đơn (CAS) hoặc theo key (`computeIfAbsent` của CHM). Phần về
+[`Lock` / `ReentrantLock` / `Condition`](/jmm/11a-lock-interface/) được trình bày
+chi tiết ở trang riêng.
 
 ### Bảng tra nhanh: ai HB ai
 
@@ -307,4 +309,4 @@ latch.await();   // thấy mọi kết quả của 3 worker (HB)
 
 - [Javadoc — java.util.concurrent (package HB spec)](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/package-summary.html)
 - Trước: [Thread-safe classes](/jmm/10-thread-safe-classes/)
-- Tiếp theo: [Double-Checked Locking](/jmm/12-double-checked-locking/)
+- Tiếp theo: [Lock interface & ReentrantLock](/jmm/11a-lock-interface/)
