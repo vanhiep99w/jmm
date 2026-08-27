@@ -608,4 +608,4 @@ cùng nhả và cùng thử lại mãi mà không tiến triển.
 - [Javadoc — ReentrantLock (Java 21)](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/locks/ReentrantLock.html)
 - [Javadoc — Condition (Java 21)](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/locks/Condition.html)
 - Trước: [Happens-before trong java.util.concurrent](/jmm/11-happens-before-juc/)
-- Tiếp theo: [Double-Checked Locking](/jmm/12-double-checked-locking/)
+- Tiếp theo: [AbstractQueuedSynchronizer (AQS) từ nền tảng](/jmm/11b-abstract-queued-synchronizer/)
