@@ -84,10 +84,13 @@ thường:
 Kết quả: với biến thường không đồng bộ, chương trình chạy theo mô hình **relaxed**
 (lỏng), không phải SC. SC chỉ được "khôi phục" tại các điểm đồng bộ.
 
-```mermaid
-graph LR
-    A["Mô hình SC<br/>(dễ suy luận, chậm)"] -->|"phần cứng nới lỏng<br/>để chạy nhanh"| B["Mô hình relaxed<br/>(nhanh, khó suy luận)"]
-    B -->|"thêm đồng bộ:<br/>volatile / lock / final"| C["SC trở lại<br/>cho vùng DRF"]
+```d2 interactive title="Vì sao phần cứng & JVM không cho SC miễn phí"
+direction: right
+A: "Mô hình SC\n(dễ suy luận, chậm)"
+B: "Mô hình relaxed\n(nhanh, khó suy luận)"
+C: "SC trở lại\ncho vùng DRF"
+A -> B: "phần cứng nới lỏng\nđể chạy nhanh"
+B -> C: "thêm đồng bộ:\nvolatile / lock / final"
 ```
 
 ## 3. Định lý trung tâm: SC-DRF
@@ -110,13 +113,19 @@ Nói cách khác, JMM chia chương trình làm hai lớp:
 race**. Khi mọi truy cập xung đột đều được sắp thứ tự bởi HB → không còn data race
 → SC-DRF kích hoạt → bạn được phép suy luận tuần tự.
 
-```mermaid
-graph TD
-    A["Viết code đa luồng"] --> B{"Mọi truy cập xung đột<br/>có HB sắp thứ tự?"}
-    B -->|"Có"| C["Data-Race-Free"]
-    B -->|"Không"| D["Có data race"]
-    C --> E["SC-DRF: chạy như tuần tự<br/>✅ dễ suy luận"]
-    D --> F["Không SC<br/>❌ có thể thấy giá trị lạ"]
+```d2 interactive title="Định lý trung tâm: SC-DRF"
+direction: down
+A: "Viết code đa luồng"
+B: "Mọi truy cập xung đột\ncó HB sắp thứ tự?" {shape: diamond}
+C: "Data-Race-Free"
+D: "Có data race"
+E: "SC-DRF: chạy như tuần tự\n✅ dễ suy luận"
+F: "Không SC\n❌ có thể thấy giá trị lạ"
+A -> B
+B -> C: "Có"
+B -> D: "Không"
+C -> E
+D -> F
 ```
 
 ## 4. Data-Race-Free nghĩa là gì

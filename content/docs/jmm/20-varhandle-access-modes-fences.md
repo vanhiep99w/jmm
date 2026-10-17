@@ -52,13 +52,17 @@ Chọn đúng mức = đúng đắn + nhanh hơn. Đó là lý do j.u.c chuyển
 
 Từ **yếu → mạnh**:
 
-```mermaid
-graph LR
-    A["Plain<br/>(get/set)"] --> B["Opaque<br/>(getOpaque/setOpaque)"]
-    B --> C["Acquire/Release<br/>(getAcquire/setRelease)"]
-    C --> D["Volatile<br/>(getVolatile/setVolatile)"]
-    A -.->|"yếu nhất, nhanh nhất"| A
-    D -.->|"mạnh nhất, đắt nhất"| D
+```d2 interactive title="Bốn mức access mode"
+direction: right
+A: "Plain\n(get/set)"
+B: "Opaque\n(getOpaque/setOpaque)"
+C: "Acquire/Release\n(getAcquire/setRelease)"
+D: "Volatile\n(getVolatile/setVolatile)"
+A -> B
+B -> C
+C -> D
+A -> A: "yếu nhất, nhanh nhất" {style.stroke-dash: 4}
+D -> D: "mạnh nhất, đắt nhất" {style.stroke-dash: 4}
 ```
 
 - **Plain** — như biến thường: không atomic-ordering gì thêm, chỉ đảm bảo không

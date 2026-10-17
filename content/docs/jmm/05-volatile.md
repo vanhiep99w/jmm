@@ -79,20 +79,44 @@ void increment() {
 tác nguyên tử. Hai thread có thể đọc cùng một giá trị, cộng lên, rồi ghi lại →
 **lost update**. Đúng: dùng `AtomicInteger.incrementAndGet()`.
 
-Chương trình chạy thử (copy chạy được) cho thấy “mất số”:
+Chương trình dưới đây so sánh counter bị mất cập nhật với phiên bản dùng
+`AtomicInteger`. Chọn **Trước/Sau** để copy nguyên chương trình tương ứng:
 
-```java
-public class VolatileCounterDemo {
-    static volatile int counter = 0;   // volatile nhưng vẫn sai
+```code-diff
+title: VolatileCounterDemo.java — từ volatile sang AtomicInteger
+language: java
+view: inline
+wordDiff: true
+before:
+  label: "volatile: vẫn có lost update"
+  code: |-
+    public class VolatileCounterDemo {
+        static volatile int counter = 0;   // volatile nhưng vẫn sai
 
-    public static void main(String[] args) throws InterruptedException {
-        Runnable job = () -> { for (int i = 0; i < 100_000; i++) counter++; };
-        Thread t1 = new Thread(job), t2 = new Thread(job);
-        t1.start(); t2.start();
-        t1.join();  t2.join();
-        System.out.println(counter); // KỲ VỌNG 200000, THỰC TẾ thường < 200000
+        public static void main(String[] args) throws InterruptedException {
+            Runnable job = () -> { for (int i = 0; i < 100_000; i++) counter++; };
+            Thread t1 = new Thread(job), t2 = new Thread(job);
+            t1.start(); t2.start();
+            t1.join();  t2.join();
+            System.out.println(counter); // KỲ VỌNG 200000, THỰC TẾ thường < 200000
+        }
     }
-}
+after:
+  label: "AtomicInteger: increment nguyên tử"
+  code: |-
+    import java.util.concurrent.atomic.AtomicInteger;
+
+    public class VolatileCounterDemo {
+        static final AtomicInteger counter = new AtomicInteger();
+
+        public static void main(String[] args) throws InterruptedException {
+            Runnable job = () -> { for (int i = 0; i < 100_000; i++) counter.incrementAndGet(); };
+            Thread t1 = new Thread(job), t2 = new Thread(job);
+            t1.start(); t2.start();
+            t1.join();  t2.join();
+            System.out.println(counter.get()); // luôn 200000 sau khi join cả hai thread
+        }
+    }
 ```
 
 Vì sao mất số? `counter++` gồm 3 bước, hai thread xen vào nhau:
@@ -108,6 +132,31 @@ Vì sao mất số? `counter++` gồm 3 bước, hai thread xen vào nhau:
 
 Hai lần `++` nhưng counter chỉ tăng 1 → **lost update**. Đổi `counter` sang
 `AtomicInteger` và dùng `incrementAndGet()` thì luôn ra đúng `200000`.
+
+Lưu phiên bản **Sau** vào `VolatileCounterDemo.java` trong thư mục làm việc,
+rồi chạy các lệnh sau. Đây là transcript minh họa, không phải benchmark; phiên bản
+`volatile` không có một kết quả sai cố định và đôi khi vẫn có thể in `200000`.
+
+```terminal-session
+title: Biên dịch và chạy counter đã sửa
+description: Transcript minh họa với phiên bản AtomicInteger, không chạy lệnh trong trình duyệt.
+context:
+  kind: local
+  label: Máy đã cài JDK
+  cwd: ~/jmm-demo
+steps:
+  - id: compile
+    command: javac VolatileCounterDemo.java
+    expected: Biên dịch phiên bản Sau đã lưu vào VolatileCounterDemo.java; khi thành công thường không có stdout.
+    exitCode: 0
+  - id: run
+    command: java VolatileCounterDemo
+    outputs:
+      - stream: stdout
+        text: "200000"
+    expected: Hai thread, mỗi thread tăng 100000 lần; join xong mới đọc kết quả.
+    exitCode: 0
+```
 
 ### 4.2 "Publish" object qua volatile field của chính object
 

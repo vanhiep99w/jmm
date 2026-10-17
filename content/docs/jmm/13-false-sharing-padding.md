@@ -38,13 +38,20 @@ line**, mỗi lần ghi sẽ invalidate cache line của core kia → hai core "
 dòng cache qua lại → hiệu năng tụt (latency cao, throughput thấp) **dù không hề có
 bug logic**.
 
-```text
-Cache line (64 bytes)
-┌──────────────┬──────────────┬───────── ... ─────────┐
-│  biến a      │  biến b      │  (các byte khác)       │
-└──────────────┴──────────────┴───────── ... ─────────┘
-   ↑ Core 0 ghi   ↑ Core 1 ghi
-   → mỗi lần ghi a làm invalidate cả line ở Core 1 (và ngược lại)
+```d2 interactive title="False sharing: hai biến chung một cache line"
+direction: down
+core0: Core 0 {icon: https://icons.d2lang.com/tech/014-cpu.svg}
+core1: Core 1 {icon: https://icons.d2lang.com/tech/014-cpu.svg}
+line: "Cache line (64 bytes)" {
+  grid-columns: 3
+  a: biến a
+  b: biến b
+  rest: các byte khác
+}
+core0 -> line.a: ghi
+core1 -> line.b: ghi
+core0 -> core1: "ghi a làm invalidate cả line ở Core 1" {style.stroke-dash: 4}
+core1 -> core0: "ghi b làm invalidate cả line ở Core 0" {style.stroke-dash: 4}
 ```
 
 ## 2. Vì sao "cùng cache line" gây chậm

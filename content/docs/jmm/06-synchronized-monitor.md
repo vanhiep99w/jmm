@@ -135,14 +135,19 @@ Mỗi object trong Java có header gồm:
   - **Entry List**: các thread đang chờ lấy lock.
   - **Wait Set**: các thread đang `wait()` trên lock này.
 
-```mermaid
-graph TD
-    O[Object header: Mark Word] --> M[Monitor]
-    M --> OW[Owner: thread giữ lock]
-    M --> EL[Entry List: chờ lấy lock]
-    M --> WS[Wait Set: đang wait]
-    WS -->|notify / notifyAll| EL
-    EL -->|owner unlock| OW
+```d2 interactive title="Monitor trong JVM"
+direction: down
+O: "Object header: Mark Word"
+M: "Monitor"
+OW: "Owner: thread giữ lock"
+EL: "Entry List: chờ lấy lock"
+WS: "Wait Set: đang wait"
+O -> M
+M -> OW
+M -> EL
+M -> WS
+WS -> EL: "notify / notifyAll"
+EL -> OW: "owner unlock"
 ```
 
 ### 3.1 Entry List

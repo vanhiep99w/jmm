@@ -64,19 +64,30 @@ state + synchronization queue + park/unpark
 
 Sơ đồ tư duy quan trọng nhất:
 
-```mermaid
-flowchart TD
-    A[Thread gọi acquire] --> B{tryAcquire thành công?}
-    B -->|Có| C[Tiếp tục chạy]
-    B -->|Không| D[Tạo node và enqueue]
-    D --> E{Đứng sát head và acquire được?}
-    E -->|Có| F[Đặt node làm head rồi tiếp tục]
-    E -->|Không| G[Park thread]
-    G --> H[Được unpark hoặc bị interrupt]
-    H --> E
-    I[Thread khác gọi release] --> J{tryRelease báo đã sẵn sàng?}
-    J -->|Có| K[Unpark successor]
-    K --> H
+```d2 interactive title="Tổng quan"
+direction: down
+A: "Thread gọi acquire"
+B: "tryAcquire thành công?" {shape: diamond}
+C: "Tiếp tục chạy"
+D: "Tạo node và enqueue"
+E: "Đứng sát head và acquire được?" {shape: diamond}
+F: "Đặt node làm head rồi tiếp tục"
+G: "Park thread"
+H: "Được unpark hoặc bị interrupt"
+I: "Thread khác gọi release"
+J: "tryRelease báo đã sẵn sàng?" {shape: diamond}
+K: "Unpark successor"
+A -> B
+B -> C: "Có"
+B -> D: "Không"
+D -> E
+E -> F: "Có"
+E -> G: "Không"
+G -> H
+H -> E
+I -> J
+J -> K: "Có"
+K -> H
 ```
 
 ## 1. AQS nằm ở đâu trong một synchronizer
@@ -112,14 +123,13 @@ public final class MySynchronizer {
 
 Có ba tầng trách nhiệm:
 
-```text
-API công khai: enter()/leave()
-        │
-        ▼
-Subclass Sync: định nghĩa luật state qua tryAcquire()/tryRelease()
-        │
-        ▼
-AQS: state, queue, CAS, park/unpark và lifecycle chờ
+```d2 interactive title="API, policy của subclass và cơ chế AQS"
+direction: down
+n0: "API công khai: enter()/leave()"
+n1: "Subclass Sync: luật state\ntryAcquire()/tryRelease()"
+n2: "AQS: state, queue, CAS, park/unpark\nvà lifecycle chờ"
+n0 -> n1
+n1 -> n2
 ```
 
 ### 1.1 AQS làm gì
@@ -209,11 +219,13 @@ compareAndSetState(0, 1);
 
 Nếu A và B cùng gọi CAS:
 
-```text
-state ban đầu = 0
-
-Thread A: CAS(0, 1) → thành công
-Thread B: CAS(0, 1) → thất bại vì state hiện đã là 1
+```d2 interactive title="Chỉ một CAS đổi state từ 0 sang 1"
+shape: sequence_diagram
+a: Thread A
+state: state = 0
+b: Thread B
+a -> state: "CAS(0, 1) thành công"
+b -> state: "CAS(0, 1) thất bại: state đã là 1"
 ```
 
 Đọc `state == 0` không cấp quyền. **CAS thành công** mới là điểm thread claim
@@ -224,11 +236,15 @@ state.
 Khi acquire thất bại, AQS tạo một node đại diện cho thread và thêm node vào
 synchronization queue:
 
-```text
-head                                           tail
-  │                                              │
-  ▼                                              ▼
-[dummy] ◄──► [Thread B] ◄──► [Thread C] ◄──► [Thread D]
+```d2 interactive title="Synchronization queue với head và tail"
+direction: right
+n0: "dummy / head"
+n1: "Thread B"
+n2: "Thread C"
+n3: "Thread D / tail"
+n0 <-> n1
+n1 <-> n2
+n2 <-> n3
 ```
 
 Mô hình node đơn giản hóa:
@@ -307,10 +323,16 @@ Nó không enqueue và không park.
 
 AQS cung cấp method này. Nó chạy toàn bộ protocol:
 
-```text
-tryAcquire
-  ├── thành công → return
-  └── thất bại   → enqueue → park/unpark → thử lại
+```d2 interactive title="Acquire: fast path và contended path"
+direction: right
+try: tryAcquire {shape: diamond}
+done: return
+enqueue: enqueue
+park: park/unpark
+try -> done: thành công
+try -> enqueue: thất bại
+enqueue -> park
+park -> try: thử lại
 ```
 
 Pseudocode tối giản:
@@ -353,12 +375,13 @@ if (tryAcquire(arg)) {
 
 Nếu state đang cho phép, thread đi tiếp mà không tạo node và không park:
 
-```text
-acquire
-   ↓
-tryAcquire thành công
-   ↓
-return ngay
+```d2 interactive title="Fast path không cần queue"
+direction: right
+n0: "acquire"
+n1: "tryAcquire thành công"
+n2: "return ngay"
+n0 -> n1
+n1 -> n2
 ```
 
 Queue chỉ cần thiết cho các thread **không acquire được ngay**.
@@ -368,18 +391,18 @@ Queue chỉ cần thiết cho các thread **không acquire được ngay**.
 Nếu `tryAcquire()` trả `false`, AQS tạo node cho current thread và nối nó vào
 `tail`:
 
-```text
-Trước:
-
-head ◄──► B
-          ▲
-          tail
-
-Sau khi C enqueue:
-
-head ◄──► B ◄──► C
-                  ▲
-                  tail
+```d2 mode=steps title="Enqueue C ở cuối queue"
+direction: right
+head: head
+b: B / tail
+head <-> b
+steps: {
+  "C enqueue": {
+    b: B
+    c: C / tail
+    b <-> c
+  }
+}
 ```
 
 Cập nhật `tail` phải atomic vì nhiều thread có thể enqueue đồng thời. AQS sử dụng
@@ -389,8 +412,15 @@ CAS và retry thay vì một phép gán không được bảo vệ.
 
 Queue thường được mô hình hóa với một head làm node mốc:
 
-```text
-head → B → C → D
+```d2 interactive title="Thứ tự chờ trong synchronization queue"
+direction: right
+n0: "head"
+n1: "B"
+n2: "C"
+n3: "D"
+n0 <-> n1
+n1 <-> n2
+n2 <-> n3
 ```
 
 B là node sát head. B được ưu tiên gọi lại `tryAcquire()`:
@@ -404,9 +434,19 @@ if (node.prev == head && tryAcquire(arg)) {
 
 Khi B acquire thành công, node B trở thành head mới:
 
-```text
-Trước: [head cũ] → [B] → [C] → [D]
-Sau:               [B/head] → [C] → [D]
+```d2 mode=steps title="B acquire thành công rồi trở thành head mới"
+direction: right
+old: head cũ
+b: B
+c: C
+d: D
+old -> b -> c -> d
+steps: {
+  "B thành head": {
+    old: null
+    b: B / head
+  }
+}
 ```
 
 Thông tin waiter của head mới có thể được xóa. C lúc này là waiter gần head nhất.
@@ -473,10 +513,13 @@ Giá trị trả về của `tryRelease()` rất quan trọng:
 
 Ví dụ một subclass quy định phải release ba đơn vị:
 
-```text
-state 3 → 2: tryRelease trả false
-state 2 → 1: tryRelease trả false
-state 1 → 0: tryRelease trả true, AQS signal waiter
+```d2 interactive title="Chỉ khi state về 0 mới signal waiter"
+direction: right
+n0: "state 3 → 2\ntryRelease = false"
+n1: "state 2 → 1\ntryRelease = false"
+n2: "state 1 → 0\ntryRelease = true; AQS signal waiter"
+n0 -> n1
+n1 -> n2
 ```
 
 AQS không biết vì sao `1 → 0` là mốc quan trọng. Subclass định nghĩa điều đó.
@@ -504,30 +547,54 @@ A không xuất hiện trong queue vì nó không phải waiter.
 
 ### Giai đoạn 2: B, C, D acquire thất bại
 
-```text
-B.tryAcquire() → false → enqueue → park
-C.tryAcquire() → false → enqueue → park
-D.tryAcquire() → false → enqueue → park
+```d2 interactive title="Acquire thất bại: enqueue rồi park"
+direction: right
+b: B.tryAcquire = false
+c: C.tryAcquire = false
+d: D.tryAcquire = false
+enqueue: enqueue
+park: park
+b -> enqueue
+c -> enqueue
+d -> enqueue
+enqueue -> park
 ```
 
 Queue:
 
-```text
-head → B → C → D
+```d2 interactive title="Queue đang chờ: B đứng sát head"
+direction: right
+n0: "head"
+n1: "B"
+n2: "C"
+n3: "D"
+n0 <-> n1
+n1 <-> n2
+n2 <-> n3
 ```
 
 ### Giai đoạn 3: A release
 
-```text
-A gọi release()
-tryRelease() → true
-AQS unpark B
+```d2 interactive title="Release thành công dẫn tới unpark"
+direction: right
+n0: "A gọi release()"
+n1: "tryRelease() = true"
+n2: "AQS unpark B"
+n0 -> n1
+n1 -> n2
 ```
 
 Queue chưa tự động biến mất:
 
-```text
-head → B → C → D
+```d2 interactive title="Queue đang chờ: B đứng sát head"
+direction: right
+n0: "head"
+n1: "B"
+n2: "C"
+n3: "D"
+n0 <-> n1
+n1 <-> n2
+n2 <-> n3
 ```
 
 B chỉ được phép thức dậy và chạy lại protocol.
@@ -536,39 +603,46 @@ B chỉ được phép thức dậy và chạy lại protocol.
 
 B thức dậy:
 
-```text
-B.prev == head       → đúng
-B.tryAcquire()       → true
-B trở thành head mới
+```d2 interactive title="B phải acquire lại trước khi thành head"
+direction: right
+n0: "B.prev == head: đúng"
+n1: "B.tryAcquire() = true"
+n2: "B trở thành head mới"
+n0 -> n1
+n1 -> n2
 ```
 
 Queue còn lại về mặt waiter:
 
-```text
-B/head → C → D
+```d2 interactive title="Sau khi B acquire thành công"
+direction: right
+n0: "B / head"
+n1: "C"
+n2: "D"
+n0 <-> n1
+n1 <-> n2
 ```
 
 Bây giờ C là waiter đầu tiên. Khi B release thành công, AQS signal C.
 
-```mermaid
-sequenceDiagram
-    participant A as Thread A
-    participant Q as AQS queue
-    participant B as Thread B
-    participant C as Thread C
-
-    A->>A: tryAcquire thành công
-    B->>B: tryAcquire thất bại
-    B->>Q: enqueue Node B
-    B->>B: park
-    C->>C: tryAcquire thất bại
-    C->>Q: enqueue Node C
-    C->>C: park
-    A->>A: tryRelease thành công
-    A->>B: unpark
-    B->>B: tryAcquire lại
-    B->>Q: trở thành head
-    Note over B: B tiếp tục chạy
+```d2 interactive title="Giai đoạn 4: B acquire lại"
+shape: sequence_diagram
+A: "Thread A"
+Q: "AQS queue"
+B: "Thread B"
+C: "Thread C"
+A -> A: "tryAcquire thành công"
+B -> B: "tryAcquire thất bại"
+B -> Q: "enqueue Node B"
+B -> B: "park"
+C -> C: "tryAcquire thất bại"
+C -> Q: "enqueue Node C"
+C -> C: "park"
+A -> A: "tryRelease thành công"
+A -> B: "unpark"
+B -> B: "tryAcquire lại"
+B -> Q: "trở thành head"
+B.note1: "B tiếp tục chạy"
 ```
 
 ## 7. Hai thread cùng enqueue có làm hỏng queue không
@@ -577,10 +651,11 @@ Không, nếu dùng protocol của AQS. AQS cập nhật `tail` bằng CAS.
 
 Giả sử queue đang có tail là X:
 
-```text
-head → X
-         ↑
-         tail
+```d2 interactive title="Queue trước khi hai thread tranh enqueue"
+direction: right
+n0: "head"
+n1: "X / tail"
+n0 <-> n1
 ```
 
 B và C cùng đọc `tail == X`, rồi cùng muốn trở thành tail mới:
@@ -592,10 +667,13 @@ C: CAS(tail, X, C)
 
 Chỉ một CAS thành công. Giả sử B thắng:
 
-```text
-head → X → B
-              ↑
-              tail
+```d2 interactive title="B thắng CAS tail trước"
+direction: right
+n0: "head"
+n1: "X"
+n2: "B / tail"
+n0 <-> n1
+n1 <-> n2
 ```
 
 C thấy CAS thất bại, đọc tail mới là B, nối lại predecessor rồi retry:
@@ -606,10 +684,15 @@ C: CAS(tail, B, C) → thành công
 
 Kết quả:
 
-```text
-head → X → B → C
-                  ↑
-                  tail
+```d2 interactive title="C retry thành công sau B"
+direction: right
+n0: "head"
+n1: "X"
+n2: "B"
+n3: "C / tail"
+n0 <-> n1
+n1 <-> n2
+n2 <-> n3
 ```
 
 Điểm mấu chốt:
@@ -626,12 +709,17 @@ thể thoát khỏi `park()`.
 
 Timeline có thể là:
 
-```text
-1. A release state
-2. AQS gọi unpark(B)
-3. B chưa được OS scheduler cấp CPU
-4. State có thể thay đổi trước khi B chạy
-5. B chạy và phải gọi tryAcquire() lại
+```d2 interactive title="Unpark không trao lock và không bảo đảm được cấp CPU ngay"
+direction: down
+n0: "A release state"
+n1: "AQS unpark(B)"
+n2: "B chưa được OS scheduler cấp CPU"
+n3: "State có thể thay đổi trước khi B chạy"
+n4: "B chạy: phải gọi tryAcquire() lại"
+n0 -> n1
+n1 -> n2
+n2 -> n3
+n3 -> n4
 ```
 
 AQS vì vậy luôn dùng vòng lặp kiểm tra điều kiện:
@@ -720,13 +808,17 @@ tryReleaseShared(int arg);
 
 Ví dụ state là số permit:
 
-```text
-state = 3
-
-B acquire shared → state = 2 → thành công
-C acquire shared → state = 1 → thành công
-D acquire shared → state = 0 → thành công
-E acquire shared → không còn permit → enqueue
+```d2 interactive title="Shared acquire tiêu thụ permit"
+direction: right
+n0: "state = 3"
+n1: "B acquire shared\nstate = 2, thành công"
+n2: "C acquire shared\nstate = 1, thành công"
+n3: "D acquire shared\nstate = 0, thành công"
+n4: "E acquire shared\nkhông còn permit → enqueue"
+n0 -> n1
+n1 -> n2
+n2 -> n3
+n3 -> n4
 ```
 
 Shared release có thể khởi động quá trình propagation, đánh thức nhiều waiter theo
@@ -877,20 +969,29 @@ public final class OneShotGate {
 
 Trước `open()`:
 
-```text
-state = 0
-B.await() → -1 → enqueue và park
-C.await() → -1 → enqueue và park
-D.await() → -1 → enqueue và park
+```d2 interactive title="Shared acquire trước khi có tín hiệu"
+direction: right
+state: state = 0
+b: "B.await() → -1"
+c: "C.await() → -1"
+d: "D.await() → -1"
+wait: enqueue và park
+state -> b -> wait
+state -> c -> wait
+state -> d -> wait
 ```
 
 Sau `open()`:
 
-```text
-state = 1
-releaseShared trả true
-AQS bắt đầu signal/propagate
-B, C, D lần lượt thức dậy và acquire shared thành công
+```d2 interactive title="Shared release phát tín hiệu tới các waiter"
+direction: right
+n0: "state = 1"
+n1: "releaseShared trả true"
+n2: "AQS signal/propagate"
+n3: "B, C, D lần lượt thức dậy\nvà acquire shared thành công"
+n0 -> n1
+n1 -> n2
+n2 -> n3
 ```
 
 Thread E gọi `await()` sau khi cổng đã mở sẽ thấy `state == 1` và đi qua ngay.
@@ -913,15 +1014,20 @@ phải được đánh dấu cancelled và bỏ qua/unlink khỏi đường ti�
 
 Ví dụ:
 
-```text
-Trước cancellation:
-head → B → C → D
-
-C bị cancel:
-head → B → [C cancelled] → D
-
-Protocol sửa/bỏ qua liên kết:
-head → B → D
+```d2 mode=steps title="AQS bỏ qua node đã cancellation"
+direction: right
+head: head
+b: B
+c: C
+d: D
+head -> b -> c -> d
+steps: {
+  "C bị cancel": {c: C cancelled}
+  "Sửa hoặc bỏ qua liên kết": {
+    c: null
+    b -> d
+  }
+}
 ```
 
 Đây là một lý do source AQS phức tạp hơn pseudocode. Nó phải bảo đảm D vẫn có thể
@@ -932,23 +1038,28 @@ head → B → D
 AQS có thể tạo `ConditionObject`, nhưng condition queue không phải synchronization
 queue.
 
-```text
-AQS synchronizer
-├── synchronization queue
-│   └── thread đang chờ acquire state
-│
-└── condition queue
-    └── thread đã nhả exclusive state và đang chờ điều kiện
+```d2 interactive title="Synchronization queue khác condition queue"
+direction: right
+aqs: AQS synchronizer
+sync: "Synchronization queue\nThread chờ acquire state"
+condition: "Condition queue\nThread đã nhả exclusive state, chờ điều kiện"
+aqs -> sync
+aqs -> condition
 ```
 
 Một lifecycle điển hình:
 
-```mermaid
-flowchart LR
-    A[Thread đang giữ exclusive state] -->|await| B[Nhả state hoàn toàn]
-    B --> C[Condition queue]
-    C -->|signal| D[Synchronization queue]
-    D -->|acquire lại thành công| E[await trả về]
+```d2 interactive title="Condition queue khác synchronization queue"
+direction: right
+A: "Thread đang giữ exclusive state"
+B: "Nhả state hoàn toàn"
+C: "Condition queue"
+D: "Synchronization queue"
+E: "await trả về"
+A -> B: "await"
+B -> C
+C -> D: "signal"
+D -> E: "acquire lại thành công"
 ```
 
 `signal()` không làm thread chạy tiếp ngay. Nó chuyển waiter sang synchronization
@@ -966,10 +1077,15 @@ thiết bên trong synchronizer. Tuy nhiên, public memory-consistency guarantee
 
 Mô hình bàn giao mong muốn thường là:
 
-```text
-Thread A: writes → successful release
-                         happens-before
-Thread B:          successful acquire → reads
+```d2 interactive title="HB qua successful release/acquire"
+direction: right
+n0: "Thread A: writes"
+n1: "Thread A: successful release"
+n2: "Thread B: successful acquire"
+n3: "Thread B: reads"
+n0 -> n1: "program order"
+n1 -> n2: "happens-before"
+n2 -> n3: "program order"
 ```
 
 Subclass phải cập nhật state đúng thứ tự. Với exclusive release có owner, pattern
@@ -1083,15 +1199,26 @@ Xem phần phân tích và ví dụ đầy đủ tại
 
 Mental model khi đọc:
 
-```text
-Fast path:
-tryAcquire thành công → không queue
-
-Contended path:
-tryAcquire thất bại → enqueue → park → unpark → retry
-
-Release path:
-tryRelease thành công → signal successor
+```d2 interactive title="Ba đường đi trong AQS"
+direction: right
+fast: Fast path {
+  a: tryAcquire thành công
+  b: không queue
+  a -> b
+}
+contended: Contended path {
+  a: tryAcquire thất bại
+  b: enqueue
+  c: park
+  d: unpark
+  e: retry
+  a -> b -> c -> d -> e
+}
+release: Release path {
+  a: tryRelease thành công
+  b: signal successor
+  a -> b
+}
 ```
 
 > [!NOTE]
@@ -1164,37 +1291,41 @@ liveness, ownership, cancellation hoặc memory ordering khó tái hiện.
 
 AQS có thể được ghi nhớ bằng hai tầng:
 
-```text
-Subclass
-├── định nghĩa ý nghĩa state
-├── tryAcquire / tryRelease
-├── exclusive/shared/fair/reentrant policy
-└── ownership và invariant
-
-AQS framework
-├── state access + CAS
-├── synchronization queue
-├── enqueue an toàn
-├── park/unpark
-├── retry protocol
-├── interrupt/timeout/cancellation
-└── ConditionObject infrastructure
+```d2 interactive title="Policy của subclass và cơ chế AQS"
+direction: right
+grid-columns: 2
+g0: "Subclass" {
+  grid-columns: 1
+  n0: "định nghĩa ý nghĩa state"
+  n1: "tryAcquire / tryRelease"
+  n2: "exclusive/shared/fair/reentrant policy"
+  n3: "ownership và invariant"
+}
+g1: "AQS framework" {
+  grid-columns: 1
+  n0: "state access + CAS"
+  n1: "synchronization queue"
+  n2: "enqueue an toàn"
+  n3: "park/unpark"
+  n4: "retry protocol"
+  n5: "interrupt/timeout/cancellation"
+  n6: "ConditionObject infrastructure"
+}
 ```
 
 Luồng quan trọng nhất:
 
-```text
-acquire
-  ↓
-tryAcquire thành công? ── có → tiếp tục
-  │
-  không
-  ↓
-enqueue → park
-            ↑
-release → unpark
-            ↓
-       tryAcquire lại
+```d2 interactive title="Acquire loop: thức dậy luôn phải kiểm tra lại"
+direction: right
+acquire -> try
+try: "tryAcquire thành công?" {shape: diamond}
+done: tiếp tục
+enqueue -> park
+try -> done: có
+try -> enqueue: không
+release -> unpark
+park -> unpark: được đánh thức
+unpark -> try: thử lại
 ```
 
 AQS queue không trực tiếp cấp quyền. `tryAcquire*()` của subclass mới quyết định

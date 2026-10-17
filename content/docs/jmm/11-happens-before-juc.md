@@ -76,10 +76,11 @@ visibility ở mức ngôn ngữ.
 
 Ví dụ:
 
-```text
-Actions trước executor.submit(task)
-    happens-before
-Actions trong task khi được chạy
+```d2 interactive title="Submit publish dữ liệu vào task"
+direction: right
+n0: "Actions trước executor.submit(task)"
+n1: "Actions trong task khi chạy"
+n0 -> n1: "happens-before"
 ```
 
 Hãy đọc thành:
@@ -145,19 +146,15 @@ executor.submit(() -> {
 
 HB chain:
 
-```text
-Caller thread                          Worker thread
-
-box.input = 21
-      │
-      │ program order
-      ▼
-submit(task)
-      │
-      └──────────── happens-before ──► task bắt đầu
-                                            │
-                                            ▼
-                                      đọc input = 21
+```d2 interactive title="Cầu đi: caller tới worker"
+direction: right
+n0: "Caller: box.input = 21"
+n1: "Caller: submit(task)"
+n2: "Worker: task bắt đầu"
+n3: "Worker: đọc input = 21"
+n0 -> n1: "program order"
+n1 -> n2: "happens-before"
+n2 -> n3: "program order"
 ```
 
 `submit()` safely publishes task cùng state đã được chuẩn bị trước đó. Task có thể
@@ -207,12 +204,14 @@ box.input = 100; // xảy ra sau submit
 Worker có thể in `21` hoặc `100`. Không có ordering xác định giữa write `100` và
 read trong task:
 
-```text
-submit ───────────────► task read
-   │
-   └── caller write 100
-
-write 100 và task read không được order với nhau
+```d2 interactive title="Ghi sau submit không được order với task read"
+direction: right
+submit: submit
+read: task read
+write: caller write 100
+submit -> read: happens-before
+submit -> write: program order
+note: "write 100 và task read không được order với nhau"
 ```
 
 Nếu cần gửi update sau submission, dùng protocol bổ sung như `volatile`, atomic,
@@ -261,18 +260,15 @@ System.out.println(box.result); // phải thấy 42
 1. Chờ computation tương ứng hoàn thành.
 2. Tạo điểm acquire để actions trong computation HB code chạy sau `get()`.
 
-```text
-Worker thread                         Caller thread
-
-box.result = 42
-      │
-      ▼
-task hoàn thành
-      │
-      └──── happens-before ────────► future.get() hoàn tất
-                                            │
-                                            ▼
-                                      đọc result = 42
+```d2 interactive title="Cầu về: worker tới caller"
+direction: right
+n0: "Worker: box.result = 42"
+n1: "Worker: task hoàn thành"
+n2: "Caller: future.get() hoàn tất"
+n3: "Caller: đọc result = 42"
+n0 -> n1: "program order"
+n1 -> n2: "happens-before"
+n2 -> n3: "program order"
 ```
 
 Field `result` không cần `volatile` chỉ để thực hiện đúng bàn giao một lần này.
@@ -301,33 +297,33 @@ System.out.println(box.output); // 42
 
 Toàn bộ chain:
 
-```mermaid
-sequenceDiagram
-    participant M as Caller thread
-    participant E as Executor
-    participant W as Worker thread
-
-    M->>M: box.input = 21
-    M->>E: submit(task)
-    E->>W: execute task
-    Note over M,W: actions trước submit HB task body
-    W->>W: đọc input = 21
-    W->>W: ghi output = 42
-    W-->>E: task completed
-    M->>E: future.get()
-    E-->>M: return
-    Note over W,M: task actions HB code sau get
-    M->>M: đọc output = 42
+```d2 interactive title="2 Ghép submit và get thành một HB chain"
+shape: sequence_diagram
+M: "Caller thread"
+E: "Executor"
+W: "Worker thread"
+M -> M: "box.input = 21"
+M -> E: "submit(task)"
+E -> W: "execute task"
+M.note1: "actions trước submit HB task body"
+W -> W: "đọc input = 21"
+W -> W: "ghi output = 42"
+W -> E: "task completed" {style.stroke-dash: 4}
+M -> E: "future.get()"
+E -> M: "return" {style.stroke-dash: 4}
+W.note2: "task actions HB code sau get"
+M -> M: "đọc output = 42"
 ```
 
 Theo tính bắc cầu:
 
-```text
-caller ghi input
-    HB qua submit
-worker đọc input và ghi output
-    HB qua Future.get
-caller đọc output
+```d2 interactive title="Ghép cầu đi và cầu về"
+direction: right
+n0: "Caller ghi input"
+n1: "Worker đọc input và ghi output"
+n2: "Caller đọc output"
+n0 -> n1: "HB qua submit"
+n1 -> n2: "HB qua Future.get"
 ```
 
 Đây là mental model quan trọng nhất của Executor/Future:
@@ -348,10 +344,13 @@ System.out.println(box.result);
 
 Caller có thể đọc trước khi task chạy:
 
-```text
-caller submit
-caller đọc result = 0
-worker ghi result = 42
+```d2 interactive title="Đọc kết quả khi chưa chờ completion"
+direction: down
+n0: "Caller submit"
+n1: "Caller đọc result = 0"
+n2: "Worker ghi result = 42"
+n0 -> n1
+n1 -> n2
 ```
 
 Ngay cả khi task “thường chạy nhanh”, timing không phải synchronization. Không dùng
@@ -460,14 +459,15 @@ int finalValue = result.join();
 
 Flow:
 
-```text
-supplyAsync hoàn thành value
-        ↓
-thenApply nhận value
-        ↓
-thenApply tiếp theo nhận result
-        ↓
-join quan sát completion cuối
+```d2 interactive title="Pipeline CompletableFuture"
+direction: right
+n0: "supplyAsync hoàn thành value"
+n1: "thenApply nhận value"
+n2: "thenApply tiếp theo nhận result"
+n3: "join quan sát completion cuối"
+n0 -> n1
+n1 -> n2
+n2 -> n3
 ```
 
 Dependent stage chỉ được kích hoạt sau khi prerequisite stage hoàn thành. Kết quả
@@ -622,15 +622,15 @@ process(received.endpoint, received.retries);
 
 HB chain:
 
-```text
-Producer ghi fields
-        ↓
-queue.put(task)
-        │ HB
-        ▼
-queue.take() trả đúng task
-        ↓
-Consumer đọc fields
+```d2 interactive title="BlockingQueue publish đúng element"
+direction: right
+n0: "Producer ghi fields"
+n1: "queue.put(task)"
+n2: "queue.take() trả đúng task"
+n3: "Consumer đọc fields"
+n0 -> n1: "program order"
+n1 -> n2: "happens-before"
+n2 -> n3: "program order"
 ```
 
 Các cặp thành công khác như `offer`/`poll` cũng bàn giao element khi consumer thực
@@ -664,8 +664,11 @@ queue.put(new Task("/payments", 3));
 `SynchronousQueue` không lưu phần tử như queue có capacity. Mỗi insertion phải bắt
 cặp trực tiếp với một removal:
 
-```text
-Producer put(message)  ◄──── handshake ────► Consumer take()
+```d2 interactive title="SynchronousQueue: rendezvous giữa producer và consumer"
+direction: right
+p: "Producer put(message)"
+c: "Consumer take()"
+p <-> c: handshake
 ```
 
 Dữ liệu trước `put()` được publish cho consumer nhận message. Producer có thể phải
@@ -774,10 +777,15 @@ hơn.
 
 Cầu HB của lock:
 
-```text
-Thread A: writes → unlock(L)
-                         happens-before
-Thread B:          lock(L) thành công → reads
+```d2 interactive title="Release và acquire trên cùng lock"
+direction: right
+n0: "Thread A: writes"
+n1: "Thread A: unlock(L)"
+n2: "Thread B: lock(L) thành công"
+n3: "Thread B: reads"
+n0 -> n1: "program order"
+n1 -> n2: "happens-before"
+n2 -> n3: "program order"
 ```
 
 Phải là cùng synchronization object/protocol. Unlock lock A không publish cho
@@ -839,12 +847,13 @@ void worker() throws Exception {
 
 Ordering theo contract:
 
-```text
-actions trước await() của participant
-    HB
-barrier action
-    HB
-actions sau await() thành công của participant khác
+```d2 interactive title="CyclicBarrier và barrier action"
+direction: right
+n0: "Actions trước await() của participant"
+n1: "Barrier action"
+n2: "Actions sau await() thành công\ncủa participant khác"
+n0 -> n1: "happens-before"
+n1 -> n2: "happens-before"
 ```
 
 Barrier có thể tái sử dụng cho phase tiếp theo sau khi tất cả participant vượt
@@ -900,16 +909,18 @@ consume(full);
 
 Memory effect là hai chiều:
 
-```text
-actions trước exchange của Thread A
-    HB
-actions sau exchange của Thread B
-
-và ngược lại
-
-actions trước exchange của Thread B
-    HB
-actions sau exchange của Thread A
+```d2 interactive title="Exchanger publish hai chiều"
+direction: right
+a: Thread A {
+  before: Actions trước exchange
+  after: Actions sau exchange
+}
+b: Thread B {
+  before: Actions trước exchange
+  after: Actions sau exchange
+}
+a.before -> b.after: happens-before
+b.before -> a.after: happens-before
 ```
 
 Mỗi thread nhận object của đối tác. Mutation sau exchange phải tuân theo protocol
@@ -920,8 +931,11 @@ nhận sử dụng cho tới lần bàn giao tiếp theo.
 
 ### Không bảo đảm thời gian
 
-```text
-submit HB task body
+```d2 interactive title="Submit tới task body"
+direction: right
+n0: "submit"
+n1: "task body"
+n0 -> n1: "happens-before"
 ```
 
 không có nghĩa task chạy trong một millisecond hay trước deadline.
@@ -975,16 +989,17 @@ Khi đọc code concurrent, làm lần lượt:
 
 Ví dụ pipeline:
 
-```text
-Producer dựng Message
-    ↓ trước put
-BlockingQueue.put(message)
-    HB
-Consumer.take() nhận message
-    ↓ xử lý trong task
-Future completion
-    HB
-Coordinator Future.get()
+```d2 interactive title="Ghép queue publication với Future completion"
+direction: right
+n0: "Producer dựng Message"
+n1: "BlockingQueue.put(message)"
+n2: "Consumer.take() nhận message"
+n3: "Future completion"
+n4: "Coordinator Future.get()"
+n0 -> n1: "trước put"
+n1 -> n2: "happens-before"
+n2 -> n3: "xử lý trong task"
+n3 -> n4: "happens-before"
 ```
 
 Nếu một mắt xích không có matching synchronization action, chain bị đứt tại đó.
@@ -1008,35 +1023,46 @@ Nếu một mắt xích không có matching synchronization action, chain bị �
 
 Các cầu bàn giao phổ biến:
 
-```text
-Caller writes
-    → submit/execute
-    → Task reads
-
-Task writes
-    → Future completion
-    → get/join
-    → Caller reads
-
-Producer writes
-    → concurrent collection insertion
-    → access/removal đúng element
-    → Consumer reads
-
-Thread A writes
-    → unlock/release/countDown
-    → lock/acquire/await thành công
-    → Thread B reads
+```d2 interactive title="Các mẫu cầu visibility thường gặp"
+direction: right
+submit: Caller → Task {
+  a: Caller writes
+  b: submit/execute
+  c: Task reads
+  a -> b -> c
+}
+future: Task → Caller {
+  a: Task writes
+  b: Future completion
+  c: "get/join"
+  d: Caller reads
+  a -> b -> c -> d
+}
+collection: Producer → Consumer {
+  a: Producer writes
+  b: Concurrent collection insertion
+  c: Access/removal đúng element
+  d: Consumer reads
+  a -> b -> c -> d
+}
+release: Release → Acquire {
+  a: Thread A writes
+  b: "unlock/release/countDown"
+  c: "lock/acquire/await thành công"
+  d: Thread B reads
+  a -> b -> c -> d
+}
 ```
 
 Với Executor/Future, công thức quan trọng nhất là:
 
-```text
-writes trước submit
-    HB
-task body
-    HB
-code sau Future.get
+```d2 interactive title="Chuỗi HB từ submit tới Future.get"
+direction: right
+n0: "writes trước submit"
+n1: "task body"
+n2: "code sau Future.get"
+n0 -> n1: "happens-before"
+n1 -> n2: "happens-before"
 ```
 
 `submit()` là cầu đi; `get()` là cầu về. Không gọi matching operation, mutate dữ

@@ -92,15 +92,15 @@ void process() {
 Đặt fence **sau** đoạn dùng tài nguyên (thường trong `finally`) → object không thể
 bị cleanup trước khi `nativeWork` xong.
 
-```mermaid
-sequenceDiagram
-    participant T as Thread chạy process()
-    participant G as GC / Cleaner
-    T->>T: p = this.peer
-    T->>T: nativeWork(p) đang chạy
-    Note over T,G: KHÔNG có fence → G thấy 'this' chết → free(peer) ❌
-    T->>T: reachabilityFence(this)
-    Note over T,G: CÓ fence → 'this' sống tới đây → cleanup chỉ chạy SAU ✅
+```d2 interactive title="Reference.reachabilityFence"
+shape: sequence_diagram
+T: "Thread chạy process()"
+G: "GC / Cleaner"
+T -> T: "p = this.peer"
+T -> T: "nativeWork(p) đang chạy"
+T.note1: "KHÔNG có fence → G thấy 'this' chết → free(peer) ❌"
+T -> T: "reachabilityFence(this)"
+T.note2: "CÓ fence → 'this' sống tới đây → cleanup chỉ chạy SAU ✅"
 ```
 
 ## 4. Ví dụ với tài nguyên native

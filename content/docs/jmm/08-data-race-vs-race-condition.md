@@ -138,13 +138,13 @@ trong `synchronized`/`Lock`, hoặc dùng CAS để "kiểm tra và trừ" thàn
 
 ## 3. Quan hệ giữa hai khái niệm
 
-```mermaid
-graph TD
-    RC[Race condition: lỗi logic do thứ tự thực thi]
-    DR[Data race: thiếu happens-before]
-    DR -->|là tập con của| RC
-    CTA[check-then-act / lost update<br/>có visibility nhưng thiếu mutual exclusion]
-    CTA -->|cũng là| RC
+```d2 interactive title="Quan hệ giữa hai khái niệm"
+direction: down
+RC: "Race condition: lỗi logic do thứ tự thực thi"
+DR: "Data race: thiếu happens-before"
+CTA: "check-then-act / lost update\ncó visibility nhưng thiếu mutual exclusion"
+DR -> RC: "là tập con của"
+CTA -> RC: "cũng là"
 ```
 
 > [!NOTE]

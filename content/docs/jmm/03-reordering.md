@@ -24,11 +24,15 @@ chỉ phát sinh khi reorder bị quan sát bởi thread khác mà không có đ
 
 ## 1. Ba nguồn gây reorder
 
-```mermaid
-graph LR
-    A[Code nguồn] -->|reorder #1| B[Compiler / javac]
-    B -->|reorder #2| C[JIT / HotSpot]
-    C -->|reorder #3| D[CPU out-of-order + cache/store buffer]
+```d2 interactive title="Ba nguồn gây reorder"
+direction: right
+A: "Code nguồn"
+B: "Compiler / javac"
+C: "JIT / HotSpot"
+D: "CPU out-of-order + cache/store buffer" {icon: https://icons.d2lang.com/tech/014-cpu.svg}
+A -> B: "reorder #1"
+B -> C: "reorder #2"
+C -> D: "reorder #3"
 ```
 
 | Nguồn | Lý do reorder |

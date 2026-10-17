@@ -51,12 +51,16 @@ interrupt, fairness, hoặc nhiều condition queue.
 > quyết định. Ví dụ `ReentrantLock` là exclusive + reentrant; `ReadLock` của
 > `ReentrantReadWriteLock` cũng có kiểu `Lock` nhưng cho nhiều reader cùng giữ.
 
-```mermaid
-flowchart LR
-    A[Thread A] -->|lock: acquire| B[critical section A]
-    B -->|unlock: release| C[Lock]
-    C -->|lock: acquire| D[critical section B]
-    B -. writes trước unlock .-> D
+```d2 interactive title="Tổng quan"
+direction: right
+A: "Thread A"
+B: "critical section A"
+C: "Lock"
+D: "critical section B"
+A -> B: "lock: acquire"
+B -> C: "unlock: release"
+C -> D: "lock: acquire"
+B -> D: "writes trước unlock" {style.stroke-dash: 4}
 ```
 
 ## 1. Lock interface giải quyết vấn đề gì
@@ -165,10 +169,15 @@ Theo contract của `Lock`, một `unlock()` thành công có cùng memory synch
 effects như **monitor unlock**; một `lock()` thành công có effects như **monitor
 lock**.
 
-```text
-Thread A: write shared state → unlock(L)
-                                  happens-before
-Thread B:                    lock(L) → read shared state
+```d2 interactive title="Cùng một lock tạo cầu HB"
+direction: right
+n0: "Thread A: write shared state"
+n1: "Thread A: unlock(L)"
+n2: "Thread B: lock(L)"
+n3: "Thread B: read shared state"
+n0 -> n1: "program order"
+n1 -> n2: "happens-before"
+n2 -> n3: "program order"
 ```
 
 Hệ quả: mọi write của A trước `unlock(L)` được B thấy sau khi B lấy được **cùng
@@ -406,11 +415,15 @@ trong một operation.
 Một object monitor chỉ có một `wait set`. `ReentrantLock` có thể tạo nhiều
 `Condition`, mỗi cái là một hàng đợi chờ có ý nghĩa nghiệp vụ riêng.
 
-```text
-ReentrantLock
-├── sync queue: thread đang chờ lấy lock
-├── notEmpty queue: consumer đang chờ có dữ liệu
-└── notFull queue: producer đang chờ còn chỗ
+```d2 interactive title="Mỗi Condition có hàng chờ riêng"
+direction: right
+lock: ReentrantLock
+sync: "Sync queue\nThread đang chờ lấy lock"
+empty: "notEmpty queue\nConsumer chờ có dữ liệu"
+full: "notFull queue\nProducer chờ còn chỗ"
+lock -> sync
+lock -> empty
+lock -> full
 ```
 
 Điều này giúp producer chỉ đánh thức consumer (`notEmpty.signal()`), thay vì đánh
@@ -540,9 +553,16 @@ Cải thiện trước theo thứ tự:
 
 Deadlock thường xuất hiện khi hai thread lấy hai lock theo thứ tự ngược nhau:
 
-```text
-T1: giữ accountLock  → chờ ledgerLock
-T2: giữ ledgerLock   → chờ accountLock
+```d2 interactive title="Lock ordering ngược nhau gây deadlock"
+direction: right
+t1: T1
+t2: T2
+account: accountLock
+ledger: ledgerLock
+account -> t1: đang được giữ bởi
+ledger -> t2: đang được giữ bởi
+t1 -> ledger: chờ
+t2 -> account: chờ
 ```
 
 Quy tắc phòng ngừa đơn giản nhất: định nghĩa một **global lock order** và mọi code

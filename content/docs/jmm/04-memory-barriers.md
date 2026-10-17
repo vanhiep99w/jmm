@@ -122,10 +122,13 @@ Nếu `flag` cũng là biến thường, CPU/compiler có thể làm cho phép g
 được thread khác quan sát trước khi phép ghi `a = 1` được quan sát. Đây là thứ tự
 quan sát có thể xảy ra:
 
-```text
-Thread 1:  flag = true  ──đã nhìn thấy──>  Thread 2
-           a = 1        ──chưa publish──>
-Thread 2:  thấy flag == true, nhưng đọc a == 0
+```d2 interactive title="Không đồng bộ: flag xuất hiện trước dữ liệu"
+shape: sequence_diagram
+t1: Thread 1
+t2: Thread 2
+t1 -> t2: "flag = true đã được nhìn thấy"
+t1.note: "a = 1 chưa được publish"
+t2 -> t2: "đọc flag == true, nhưng a == 0"
 ```
 
 Trong source code, `a = 1` được viết trước `flag = true`, nhưng khi không có cơ chế
@@ -136,8 +139,11 @@ thread.
 
 `StoreStore` là rào chắn giữa **store trước** và **store sau** nó:
 
-```text
-store a = 1  ──StoreStore──>  store flag = true
+```d2 interactive title="StoreStore giữ thứ tự publish"
+direction: right
+n0: "store a = 1"
+n1: "store flag = true"
+n0 -> n1: "StoreStore"
 ```
 
 Nó ngăn compiler/CPU sắp xếp volatile store lên trước các store thường trước đó.
@@ -156,8 +162,11 @@ là các thread quan sát được thứ tự và visibility phù hợp. `StoreS
 Một volatile write có **release semantics**. Nó phát hành (publish) các thao tác bộ
 nhớ trước nó, ở đây gồm `a = 1`. Vì vậy, trong mô hình JMM, ta có:
 
-```text
-a = 1  -- program order / happens-before -->  flag = true
+```d2 interactive title="Program order trước volatile write"
+direction: right
+n0: "a = 1"
+n1: "flag = true"
+n0 -> n1: "program order / happens-before"
 ```
 
 `StoreStore` trong bảng chỉ là cách mô tả phần ordering này ở mức barrier. Ta không
@@ -184,23 +193,24 @@ Vì thế lời gọi `System.out.println(a)` đọc `a` **sau khi** Thread 2 đ
 
 Mấu chốt là chuỗi **happens-before** sau đây:
 
-```text
-Thread 1: a = 1
-              │ program order
-              ▼
-Thread 1: flag = true (volatile write)
-              │ synchronizes-with
-              ▼
-Thread 2: đọc flag == true (volatile read)
-              │ program order
-              ▼
-Thread 2: đọc a / print(a)
+```d2 interactive title="Chuỗi happens-before qua flag"
+direction: right
+n0: "Thread 1: a = 1"
+n1: "Thread 1: flag = true\nvolatile write"
+n2: "Thread 2: đọc flag == true\nvolatile read"
+n3: "Thread 2: đọc a / print(a)"
+n0 -> n1: "program order"
+n1 -> n2: "synchronizes-with"
+n2 -> n3: "program order"
 ```
 
 Quan hệ `happens-before` có tính bắc cầu, nên:
 
-```text
-a = 1  happens-before  lần đọc a của Thread 2
+```d2 interactive title="Bắc cầu tới lần đọc a"
+direction: right
+n0: "a = 1"
+n1: "Thread 2: đọc a"
+n0 -> n1: "happens-before"
 ```
 
 Nếu không có một phép ghi khác vào `a` chen vào giữa, lần đọc đó bắt buộc thấy `1`.
@@ -213,18 +223,20 @@ thread ghi đồng thời, kết luận này không còn áp dụng.
 
 Bảo đảm chính xác của ví dụ là:
 
-```text
-Thread 2 đọc flag == true
-        ⇒
-Thread 2 đọc a sau đó chắc chắn thấy a == 1
+```d2 interactive title="Bảo đảm một chiều của volatile"
+direction: right
+n0: "Thread 2 đọc flag == true"
+n1: "Thread 2 đọc a sau đó\nchắc chắn thấy a == 1"
+n0 -> n1: "bảo đảm"
 ```
 
 Chiều ngược lại **không được đảm bảo**:
 
-```text
-Thread 2 đọc a == 1
-        ⇏
-Thread 2 đọc flag == true
+```d2 interactive title="Không có suy luận ngược"
+direction: right
+a: "Thread 2 đọc a == 1"
+b: "Thread 2 đọc flag == true"
+a -> b: "KHÔNG được bảo đảm" {style.stroke-dash: 4}
 ```
 
 Ví dụ, Thread 1 có thể bị tạm dừng giữa hai phép ghi:
@@ -247,18 +259,18 @@ nào về giá trị nhìn thấy của `a`; `a` có thể vẫn là `0` hoặc 
 Sơ đồ dưới đây dùng “main memory” để dễ hình dung; đây là mô hình minh họa, không
 phải cam kết về một thao tác flush vật lý cụ thể:
 
-```mermaid
-sequenceDiagram
-    participant T1 as Thread 1 (core 0)
-    participant MM as Bộ nhớ dùng chung (minh họa)
-    participant T2 as Thread 2 (core 1)
-    T1->>T1: a = 1 (plain write)
-    Note over T1: release/StoreStore: a được đặt trước flag
-    T1->>MM: flag = true (volatile write)
-    Note over MM: volatile write publish các write trước đó
-    MM->>T2: đọc flag == true (volatile read)
-    Note over T2: acquire/LoadLoad + LoadStore
-    T2->>MM: đọc a == 1 ✓
+```d2 interactive title="Bảo đảm này chỉ đi một chiều"
+shape: sequence_diagram
+T1: "Thread 1 (core 0)"
+MM: "Bộ nhớ dùng chung (minh họa)"
+T2: "Thread 2 (core 1)"
+T1 -> T1: "a = 1 (plain write)"
+T1.note1: "release/StoreStore: a được đặt trước flag"
+T1 -> MM: "flag = true (volatile write)"
+MM.note2: "volatile write publish các write trước đó"
+MM -> T2: "đọc flag == true (volatile read)"
+T2.note3: "acquire/LoadLoad + LoadStore"
+T2 -> MM: "đọc a == 1 ✓"
 ```
 
 ## 5. Mapping xuống CPU

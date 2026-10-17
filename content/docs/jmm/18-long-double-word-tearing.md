@@ -62,17 +62,17 @@ Lý do lịch sử: trên CPU 32-bit, một biến 64-bit phải được đọc
 một thread khác có thể quan sát **nửa cao của giá trị mới + nửa thấp của giá trị
 cũ** (hoặc ngược lại).
 
-```mermaid
-sequenceDiagram
-    participant W as Thread ghi
-    participant M as Bộ nhớ (long v)
-    participant R as Thread đọc
-    Note over M: v = 0x0000_0000_0000_0000
-    W->>M: ghi nửa CAO = 0x1111_1111
-    Note over M: v = 0x1111_1111_0000_0000 (lai!)
-    R->>M: đọc v → 0x1111_1111_0000_0000 ❌
-    W->>M: ghi nửa THẤP = 0x2222_2222
-    Note over M: v = 0x1111_1111_2222_2222 (đủ)
+```d2 interactive title="long & double: ngoại lệ 64-bit"
+shape: sequence_diagram
+W: "Thread ghi"
+M: "Bộ nhớ (long v)"
+R: "Thread đọc"
+M.note1: "v = 0x0000_0000_0000_0000"
+W -> M: "ghi nửa CAO = 0x1111_1111"
+M.note2: "v = 0x1111_1111_0000_0000 (lai!)"
+R -> M: "đọc v → 0x1111_1111_0000_0000 ❌"
+W -> M: "ghi nửa THẤP = 0x2222_2222"
+M.note3: "v = 0x1111_1111_2222_2222 (đủ)"
 ```
 
 > [!CAUTION]
@@ -172,11 +172,15 @@ int v = arr[5];     // ❌ đọc biến thường — không đảm bảo thấ
 volatile (gán `arr = newArray` mới có ngữ nghĩa volatile). Việc đọc/ghi **phần tử**
 `arr[i]` vẫn là **truy cập biến thường** → không visibility, không ordering.
 
-```mermaid
-graph TD
-    A["volatile int[] arr"] --> B["reference 'arr' = VOLATILE<br/>(gán arr = ... thì visible)"]
-    A --> C["phần tử arr[i] = BIẾN THƯỜNG<br/>(arr[i] = x KHÔNG volatile)"]
-    C --> D["❌ thread khác có thể không thấy"]
+```d2 interactive title="Bẫy volatile array: chỉ reference là volatile"
+direction: down
+A: "volatile int[] arr"
+B: "reference 'arr' = VOLATILE\n(gán arr = ... thì visible)"
+C: "phần tử arr[i] = BIẾN THƯỜNG\n(arr[i] = x KHÔNG volatile)"
+D: "❌ thread khác có thể không thấy"
+A -> B
+A -> C
+C -> D
 ```
 
 ### Cách sửa đúng

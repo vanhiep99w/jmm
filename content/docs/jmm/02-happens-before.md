@@ -69,16 +69,20 @@ if (b) {      // (3)
 
 Phân tích:
 
-```text
-Program order:
-  T1: (1) → (2)
-  T2: (3) → (4)
-
-Happens-before:
-  Nếu b là volatile: (2) HB (3)  → kết hợp program order → (1) HB (4)
-                     ⇒ khi (3) thấy b == true thì (4) chắc chắn thấy a == 1.
-  Nếu b KHÔNG volatile: không có HB giữa T1 và T2
-                     ⇒ (4) có thể in a == 0.
+```d2 interactive title="Program order và cầu volatile"
+direction: right
+writer: Thread 1 {
+  a: "(1) a = 1"
+  b: "(2) b = true"
+}
+reader: Thread 2 {
+  b: "(3) đọc b == true"
+  a: "(4) đọc a"
+}
+writer.a -> writer.b: program order
+writer.b -> reader.b: "HB chỉ khi b là volatile"
+reader.b -> reader.a: program order
+note: "b volatile: (4) thấy a == 1\nb thường: không có cầu HB, có thể thấy a == 0"
 ```
 
 > [!TIP]
@@ -89,15 +93,19 @@ Happens-before:
 Đây là "cây cầu HB" nhìn bằng sơ đồ: biến `b` (volatile) là nhịp cầu, còn biến
 thường `a` "quá giang" qua cầu đó:
 
-```mermaid
-graph LR
-    subgraph T1[Thread 1]
-        A1["(1) a = 1 (biến thường)"] --> A2["(2) b = true (volatile WRITE = release)"]
-    end
-    subgraph T2[Thread 2]
-        B1["(3) đọc b == true (volatile READ = acquire)"] --> B2["(4) print(a) → thấy 1"]
-    end
-    A2 -->|"HB edge qua volatile b"| B1
+```d2 interactive title="Ví dụ minh họa"
+direction: right
+T1: "Thread 1" {
+  A1: "(1) a = 1 (biến thường)"
+  A2: "(2) b = true (volatile WRITE = release)"
+}
+T2: "Thread 2" {
+  B1: "(3) đọc b == true (volatile READ = acquire)"
+  B2: "(4) print(a) → thấy 1"
+}
+T1.A1 -> T1.A2
+T2.B1 -> T2.B2
+T1.A2 -> T2.B1: "HB edge qua volatile b"
 ```
 
 Khi (3) đọc thấy `b == true`, mọi thứ ghi **trước** (2) ở Thread 1 (gồm cả

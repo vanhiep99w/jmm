@@ -67,9 +67,11 @@ JSR-133 (do Bill Pugh, Doug Lea, Sarita Adve... soạn) viết lại hoàn toàn
   [OOTA](/jmm/19-out-of-thin-air-causality/)).
 - **Mô hình HB + SC-DRF**: cho lập trình viên một hợp đồng rõ ràng để suy luận.
 
-```mermaid
-graph LR
-    A["Java ≤ 1.4<br/>model hỏng:<br/>volatile yếu, final không an toàn,<br/>DCL bất khả thi"] -->|"JSR-133<br/>(Java 5, 2004)"| B["JMM hiện đại:<br/>HB, SC-DRF, final semantics,<br/>cấm OOTA, volatile release/acquire"]
+```d2 interactive title="JSR-133 (Java 5+) sửa những gì"
+direction: right
+A: "Java ≤ 1.4\nmodel hỏng:\nvolatile yếu, final không an toàn,\nDCL bất khả thi"
+B: "JMM hiện đại:\nHB, SC-DRF, final semantics,\ncấm OOTA, volatile release/acquire"
+A -> B: "JSR-133\n(Java 5, 2004)"
 ```
 
 ## 3. Bảng: trước vs sau JSR-133

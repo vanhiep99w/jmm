@@ -83,12 +83,17 @@ Nếu `read → compare → write` là ba bước rời rạc, hai thread có th
 ghi đè nhau (lost update). Nhưng CAS gộp cả ba thành **một action duy nhất được
 CPU hỗ trợ** (x86: `cmpxchg`, ARM: `ldxr/stxr`) → không thể bị xen ngang.
 
-```text
-T1: đọc 0 → tính 1
-T2: đọc 0 → tính 1
-T1: CAS(0→1) ✅ thành công → count = 1
-T2: CAS(0→1) ❌ thất bại (giờ đã là 1) → lặp lại
-T2: đọc 1 → tính 2 → CAS(1→2) ✅ → count = 2
+```d2 interactive title="CAS thất bại thì đọc lại và thử lại"
+shape: sequence_diagram
+t1: Thread 1
+counter: count = 0
+t2: Thread 2
+t1 -> counter: "đọc 0, tính 1"
+t2 -> counter: "đọc 0, tính 1"
+t1 -> counter: "CAS(0, 1) thành công; count = 1"
+t2 -> counter: "CAS(0, 1) thất bại; count đã là 1"
+t2 -> counter: "đọc 1, tính 2; CAS(1, 2) thành công"
+counter.note: "count = 2"
 ```
 
 > [!IMPORTANT]
@@ -130,11 +135,17 @@ ai.getAndUpdate(fn);    // áp dụng hàm fn
 thread cùng increment: tất cả đọc cùng giá trị, chỉ một CAS thành công, còn lại
 fail → retry → tốn CPU.
 
-```text
-T1: CAS(base) ✓
-T2: CAS(base) ✗ fail → retry
-T3: CAS(base) ✗ fail → retry
-T4: CAS(base) ✗ fail → retry
+```d2 interactive title="Nhiều thread tranh cùng một base"
+direction: right
+base: "base: volatile long"
+t1: T1
+t2: T2
+t3: T3
+t4: T4
+t1 -> base: "CAS thành công"
+t2 -> base: "CAS thất bại → retry" {style.stroke-dash: 4}
+t3 -> base: "CAS thất bại → retry" {style.stroke-dash: 4}
+t4 -> base: "CAS thất bại → retry" {style.stroke-dash: 4}
 ```
 
 ### 5.2 Ý tưởng của LongAdder
@@ -150,11 +161,20 @@ cells[] (mảng Cell)       // mỗi cell có volatile long value
 // sum() = base + tổng tất cả cells
 ```
 
-```text
-T1: CAS(cell[0]) ✓
-T2: CAS(cell[1]) ✓
-T3: CAS(cell[2]) ✓
-T4: CAS(cell[3]) ✓
+```d2 interactive title="Striping giảm tranh chấp trên cùng một cell"
+direction: right
+t1: T1
+t2: T2
+t3: T3
+t4: T4
+c0: "cell[0]"
+c1: "cell[1]"
+c2: "cell[2]"
+c3: "cell[3]"
+t1 -> c0: "CAS thành công"
+t2 -> c1: "CAS thành công"
+t3 -> c2: "CAS thành công"
+t4 -> c3: "CAS thành công"
 ```
 
 > [!TIP]
@@ -196,12 +216,18 @@ trị đã bị thay đổi giữa chừng → có thể sai logic.
 
 Mô tả bằng code: một stack lock-free bị ABA khi pop:
 
-```text
-Stack: A -> B -> C   (top = A)
-T1: chuẩn bị pop A, tính "top mới sẽ là B", nhưng bị tạm dừng
-T2: pop A (top=B), pop B (top=C), rồi push lại A (top=A, nhưng A.next giờ là C)
-T1: tiếp tục: CAS(top: A -> B) thấy top vẫn == A → THÀNH CÔNG (sai!)
-    → top giờ = B, nhưng B đã bị pop từ lâu → corrupt
+```d2 interactive title="ABA: cùng reference không có nghĩa cùng trạng thái"
+shape: sequence_diagram
+t1: Thread 1
+stack: Stack
+t2: Thread 2
+stack.note1: "top = A; A → B → C"
+t1 -> stack: "đọc top = A, dự kiến top mới = B"
+t1.note: "tạm dừng"
+t2 -> stack: "pop A, pop B, push lại A"
+stack.note2: "top = A nhưng A.next = C; B đã bị pop"
+t1 -> stack: "CAS(top, A, B) vẫn thành công"
+stack.note3: "top = B: liên kết bị corrupt"
 ```
 
 Fix bằng `AtomicStampedReference` (so sánh cả giá trị lẫn stamp):

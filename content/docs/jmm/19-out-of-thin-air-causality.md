@@ -37,13 +37,18 @@ phép **đoán trước** (speculation): thực thi sớm một nhánh giả đ�
 biện minh. Nếu không có ràng buộc, sự đoán trước này có thể tạo ra vòng luẩn quẩn
 "giá trị tự xác nhận chính nó".
 
-```mermaid
-graph LR
-    A["Compiler đoán: r = 42"] --> B["Ghi x = r = 42"]
-    B --> C["Thread khác đọc x = 42"]
-    C --> D["Ghi y = 42"]
-    D --> E["Đọc y = 42 → 'biện minh' cho r = 42"]
-    E -.->|"vòng luẩn quẩn<br/>không có nguồn gốc thật"| A
+```d2 interactive title="Vấn đề: data race không chỉ \"thấy giá trị cũ\""
+direction: right
+A: "Compiler đoán: r = 42"
+B: "Ghi x = r = 42"
+C: "Thread khác đọc x = 42"
+D: "Ghi y = 42"
+E: "Đọc y = 42 → 'biện minh' cho r = 42"
+A -> B
+B -> C
+C -> D
+D -> E
+E -> A: "vòng luẩn quẩn\nkhông có nguồn gốc thật" {style.stroke-dash: 4}
 ```
 
 Giá trị `42` ở đây **không** đến từ một hằng số hay phép tính có thật — nó tự sinh
@@ -112,11 +117,15 @@ trước đó** — không cho phép biện minh vòng tròn.
    **đã commit** và **độc lập** với chính nó.
 3. Không bước nào được dựa vào giả định về tương lai của chính nó.
 
-```mermaid
-graph TD
-    A["Lần ghi hợp lệ"] --> B{"Giá trị đến từ đâu?"}
-    B -->|"hằng số / phép tính / lần ghi đã commit"| C["✅ Hợp lệ"]
-    B -->|"chỉ từ chuỗi tự viện dẫn vòng tròn"| D["❌ OOTA — bị cấm"]
+```d2 interactive title="JMM cấm OOTA bằng ràng buộc nhân quả"
+direction: down
+A: "Lần ghi hợp lệ"
+B: "Giá trị đến từ đâu?" {shape: diamond}
+C: "✅ Hợp lệ"
+D: "❌ OOTA — bị cấm"
+A -> B
+B -> C: "hằng số / phép tính / lần ghi đã commit"
+B -> D: "chỉ từ chuỗi tự viện dẫn vòng tròn"
 ```
 
 > [!NOTE]

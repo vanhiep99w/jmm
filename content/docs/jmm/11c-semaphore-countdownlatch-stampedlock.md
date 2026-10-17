@@ -79,13 +79,19 @@ Ba công cụ trong trang này trả lời câu hỏi khác:
 Sự khác biệt không nằm ở việc “có queue hay không”. Queue chỉ là cơ chế quản lý
 waiter. **State machine và public contract** mới quyết định semantics.
 
-```mermaid
-flowchart TD
-    A[Cần synchronization] --> B{Mục tiêu là gì?}
-    B -->|Bảo vệ critical section độc quyền| C[Lock]
-    B -->|Giới hạn tối đa N hoạt động| D[Semaphore]
-    B -->|Chờ N sự kiện hoàn thành| E[CountDownLatch]
-    B -->|Read/write, đọc nhiều ghi ít| F[StampedLock hoặc ReadWriteLock]
+```d2 interactive title="Vì sao cả ba không đơn giản là Lock"
+direction: right
+A: "Cần synchronization"
+B: "Mục tiêu là gì?" {shape: diamond}
+C: "Lock"
+D: "Semaphore"
+E: "CountDownLatch"
+F: "StampedLock hoặc ReadWriteLock"
+A -> B
+B -> C: "Bảo vệ critical section độc quyền"
+B -> D: "Giới hạn tối đa N hoạt động"
+B -> E: "Chờ N sự kiện hoàn thành"
+B -> F: "Read/write, đọc nhiều ghi ít"
 ```
 
 ## 2. Bảng so sánh nhanh
@@ -121,18 +127,26 @@ permits = 3
 
 Mỗi acquire lấy permit; mỗi release trả permit:
 
-```text
-A acquire → permits 3 → 2
-B acquire → permits 2 → 1
-C acquire → permits 1 → 0
-D acquire → không đủ permit, phải chờ
+```d2 interactive title="Ba permit chỉ cho ba acquire thành công"
+direction: right
+n0: "permits = 3"
+n1: "A acquire: 3 → 2"
+n2: "B acquire: 2 → 1"
+n3: "C acquire: 1 → 0"
+n4: "D acquire: không đủ permit, phải chờ"
+n0 -> n1
+n1 -> n2
+n2 -> n3
+n3 -> n4
 ```
 
 Khi B release:
 
-```text
-B release → permits 0 → 1
-D có cơ hội acquire → permits 1 → 0
+```d2 interactive title="Release mở cơ hội acquire cho waiter"
+direction: right
+n0: "B release: permits 0 → 1"
+n1: "D có cơ hội acquire: permits 1 → 0"
+n0 -> n1
 ```
 
 Permit không đại diện cho một thread cụ thể. Nó giống token capacity hơn là quyền
@@ -233,16 +247,17 @@ boolean tryReleaseShared(int released) {
 
 Nếu acquire không đủ permit:
 
-```text
-tryAcquireShared < 0
-        ↓
-AQS enqueue thread
-        ↓
-park
-        ↓
-releaseShared tăng state và signal
-        ↓
-thread thức dậy, thử trừ permit lại
+```d2 interactive title="Semaphore: chờ rồi thử trừ permit lại"
+direction: down
+n0: "tryAcquireShared < 0"
+n1: "AQS enqueue thread"
+n2: "park"
+n3: "releaseShared tăng state và signal"
+n4: "Thread thức dậy, thử trừ permit lại"
+n0 -> n1
+n1 -> n2
+n2 -> n3
+n3 -> n4
 ```
 
 `Semaphore` dùng shared mode vì nhiều acquire có thể cùng thành công khi state còn
@@ -289,11 +304,15 @@ public final class LimitedClient {
 
 Tác dụng:
 
-```text
-100 caller
-   ↓
-10 caller có permit → gọi remote service
-90 caller còn lại    → chờ
+```d2 interactive title="Semaphore giới hạn số caller gọi dịch vụ"
+direction: right
+callers: 100 caller
+allowed: 10 caller có permit
+waiting: 90 caller còn lại
+service: Remote service
+callers -> allowed
+callers -> waiting: chờ
+allowed -> service: gọi
 ```
 
 Semaphore giới hạn số operation đang ở vùng giới hạn. Nó không tự tạo thread pool
@@ -366,12 +385,15 @@ count = 3
 
 Thread gọi `await()` chờ cho đến khi count bằng `0`:
 
-```text
-Worker A countDown → 3 → 2
-Worker B countDown → 2 → 1
-Worker C countDown → 1 → 0
-                         ↓
-               mọi await có thể trả về
+```d2 interactive title="Latch mở khi completion count về 0"
+direction: right
+n0: "Worker A countDown: 3 → 2"
+n1: "Worker B countDown: 2 → 1"
+n2: "Worker C countDown: 1 → 0"
+n3: "Mọi await có thể trả về"
+n0 -> n1
+n1 -> n2
+n2 -> n3
 ```
 
 Sau khi count về `0`, cổng mở vĩnh viễn:
@@ -443,10 +465,13 @@ boolean tryReleaseShared(int ignored) {
 
 Chỉ transition cuối cùng trả `true`:
 
-```text
-3 → 2: false
-2 → 1: false
-1 → 0: true → AQS propagate waiter
+```d2 interactive title="Shared release chỉ propagate khi count về 0"
+direction: right
+n0: "3 → 2: false"
+n1: "2 → 1: false"
+n2: "1 → 0: true\nAQS propagate waiter"
+n0 -> n1
+n1 -> n2
 ```
 
 Đây là shared mode vì khi cổng mở, nhiều waiter đều được phép đi qua.
@@ -504,9 +529,14 @@ done.await();      // chờ tất cả worker kết thúc
 
 Hai latch có vai trò riêng:
 
-```text
-start: count 1 → 0, phát tín hiệu bắt đầu
- done: count N → 0, phát tín hiệu hoàn tất
+```d2 interactive title="Hai latch cho bắt đầu và hoàn tất"
+direction: right
+start: "start: count 1 → 0"
+begin: phát tín hiệu bắt đầu
+done: "done: count N → 0"
+finish: phát tín hiệu hoàn tất
+start -> begin
+done -> finish
 ```
 
 Start gate giúp các worker bắt đầu gần nhau hơn nhưng không bảo đảm chạy cùng một
@@ -516,9 +546,12 @@ CPU cycle. OS scheduler vẫn quyết định thời điểm thực tế.
 
 `CountDownLatch` không reset được.
 
-```text
-count N → ... → 0
-không có đường quay lại N
+```d2 interactive title="CountDownLatch là one-shot, không reset"
+direction: right
+initial: count N
+zero: count 0
+initial -> zero: countDown tới 0
+note: "Không có đường reset về N"
 ```
 
 Chọn công cụ khác khi cần:
@@ -599,10 +632,15 @@ try {
 
 Write mode độc quyền với reader và writer khác:
 
-```text
-Writer A giữ write lock
-├── Writer B chờ
-└── Reader C chờ
+```d2 interactive title="Write lock loại trừ cả writer và reader khác"
+direction: right
+lock: Write lock
+a: Writer A
+b: Writer B
+c: Reader C
+lock -> a: đang được giữ bởi
+b -> lock: chờ
+c -> lock: chờ
 ```
 
 Biến thể:
@@ -628,11 +666,17 @@ try {
 
 Nhiều reader có thể cùng giữ read mode:
 
-```text
-Reader A ─┐
-Reader B ─┼── cùng đọc
-Reader C ─┘
-Writer D ──── chờ
+```d2 interactive title="Read lock cho nhiều reader cùng giữ"
+direction: right
+lock: Read lock
+a: Reader A
+b: Reader B
+c: Reader C
+d: Writer D
+lock -> a: cùng đọc
+lock -> b: cùng đọc
+lock -> c: cùng đọc
+d -> lock: chờ
 ```
 
 Read lock là pessimistic read: reader thực sự đăng ký read ownership ở mức state
@@ -699,14 +743,16 @@ mới tính toán phức tạp.
 lock đang giữ theo điều kiện của implementation. `validate(stamp)` kiểm tra xem có
 write acquisition liên quan xảy ra kể từ lúc stamp được cấp hay không.
 
-```text
-stamp được lấy
-    ↓
-đọc x, y
-    ↓
-validate
-  ├── true  → snapshot không bị write invalidation trong cửa sổ đó
-  └── false → không tin snapshot; đọc lại dưới read lock
+```d2 interactive title="Optimistic read phải validate hoặc fallback"
+direction: right
+stamp: Lấy optimistic stamp
+read: Đọc x, y vào local variables
+validate: validate {shape: diamond}
+valid: "Snapshot không bị write invalidation\ntrong cửa sổ đó"
+fallback: "Không tin snapshot\nđọc lại dưới read lock"
+stamp -> read -> validate
+validate -> valid: "true"
+validate -> fallback: "false"
 ```
 
 Stamp không phải object ownership và không nên được xem là số phiên bản nghiệp vụ.
@@ -765,16 +811,21 @@ phối hợp:
 
 Mô hình khái niệm:
 
-```text
-StampedLock state
-├── version/sequence information
-├── write-mode marker
-└── reader count / overflow support
-
-Waiter queue riêng
-├── writer waiter
-├── reader waiter/group
-└── park/unpark protocol riêng
+```d2 interactive title="StampedLock: state và waiter queue riêng"
+direction: right
+grid-columns: 2
+g0: "StampedLock state" {
+  grid-columns: 1
+  n0: "version/sequence information"
+  n1: "write-mode marker"
+  n2: "reader count / overflow support"
+}
+g1: "Waiter queue riêng" {
+  grid-columns: 1
+  n0: "writer waiter"
+  n1: "reader waiter/group"
+  n2: "park/unpark protocol riêng"
+}
 ```
 
 Không nên phụ thuộc vào vị trí bit cụ thể vì đây là chi tiết có thể thay đổi giữa
@@ -830,20 +881,22 @@ Ba công cụ đều có memory-consistency guarantee, nhưng điểm bàn giao 
 
 Theo Javadoc:
 
-```text
-Actions trước release() của Thread A
-    happens-before
-Actions sau acquire() thành công của Thread B
+```d2 interactive title="Semaphore release/acquire publication"
+direction: right
+n0: "Actions trước release() của Thread A"
+n1: "Actions sau acquire() thành công của Thread B"
+n0 -> n1: "happens-before"
 ```
 
 Điều này biến permit thành điểm bàn giao visibility, không chỉ capacity token.
 
 ### CountDownLatch
 
-```text
-Actions trước countDown() của worker
-    happens-before
-Actions sau await() trả về của waiter
+```d2 interactive title="CountDownLatch completion publication"
+direction: right
+n0: "Actions trước countDown() của worker"
+n1: "Actions sau await() trả về của waiter"
+n0 -> n1: "happens-before"
 ```
 
 Khi nhiều worker count down, coordinator sau `await()` có thể quan sát các actions
@@ -893,11 +946,19 @@ Chọn `Semaphore(10)` vì tài nguyên có capacity bằng mười.
 
 ### Chờ ba dependency khởi động
 
-```text
-database ready → countDown
-cache ready    → countDown
-broker ready   → countDown
-main thread    → await
+```d2 interactive title="Đợi database, cache và broker cùng sẵn sàng"
+direction: right
+database: Database ready {
+  icon: https://icons.d2lang.com/essentials/117-database.svg
+}
+cache: Cache ready
+broker: Broker ready
+latch: "CountDownLatch(3)"
+main: Main thread
+database -> latch: countDown
+cache -> latch: countDown
+broker -> latch: countDown
+latch -> main: "await trả về khi count = 0"
 ```
 
 Chọn `CountDownLatch(3)` vì đây là completion gate một lần.
@@ -917,18 +978,29 @@ Cân nhắc `StampedLock` khi optimistic read có lợi và protocol validation 
 
 ## 8. Decision tree
 
-```mermaid
-flowchart TD
-    A[Bắt đầu] --> B{Cần chờ điều gì?}
-    B -->|Quyền độc quyền trên invariant| C[Lock]
-    B -->|Một trong N permit| D[Semaphore]
-    B -->|N completion event| E[CountDownLatch]
-    B -->|Read/write coordination| F{Có cần optimistic read?}
-    F -->|Không hoặc ưu tiên đơn giản| G[ReentrantReadWriteLock]
-    F -->|Có, read nhiều write ít| H[Benchmark StampedLock]
-    E --> I{Có cần reset/nhiều phase?}
-    I -->|Không| J[CountDownLatch]
-    I -->|Có| K[CyclicBarrier hoặc Phaser]
+```d2 interactive title="Decision tree"
+direction: down
+A: "Bắt đầu"
+B: "Cần chờ điều gì?" {shape: diamond}
+C: "Lock"
+D: "Semaphore"
+E: "CountDownLatch"
+F: "Có cần optimistic read?" {shape: diamond}
+G: "ReentrantReadWriteLock"
+H: "Benchmark StampedLock"
+I: "Có cần reset/nhiều phase?" {shape: diamond}
+J: "CountDownLatch"
+K: "CyclicBarrier hoặc Phaser"
+A -> B
+B -> C: "Quyền độc quyền trên invariant"
+B -> D: "Một trong N permit"
+B -> E: "N completion event"
+B -> F: "Read/write coordination"
+F -> G: "Không hoặc ưu tiên đơn giản"
+F -> H: "Có, read nhiều write ít"
+E -> I
+I -> J: "Không"
+I -> K: "Có"
 ```
 
 Quy tắc thực dụng:
@@ -967,27 +1039,33 @@ Quy tắc thực dụng:
 
 ## Tóm tắt
 
-```text
-Semaphore
-├── AQS shared mode
-├── state = permit còn lại
-├── acquire trừ permit
-├── release cộng permit
-└── không ownership
-
-CountDownLatch
-├── AQS shared mode
-├── state = count còn lại
-├── await chờ state == 0
-├── countDown giảm state
-└── one-shot, không reset
-
-StampedLock
-├── không dùng AQS
-├── read/write state + stamp/version
-├── pessimistic read/write
-├── optimistic read + validate
-└── không reentrant
+```d2 interactive title="Ba primitive và cơ chế bên trong"
+direction: right
+grid-columns: 3
+g0: "Semaphore" {
+  grid-columns: 1
+  n0: "AQS shared mode"
+  n1: "state = permit còn lại"
+  n2: "acquire trừ permit"
+  n3: "release cộng permit"
+  n4: "không ownership"
+}
+g1: "CountDownLatch" {
+  grid-columns: 1
+  n0: "AQS shared mode"
+  n1: "state = count còn lại"
+  n2: "await chờ state == 0"
+  n3: "countDown giảm state"
+  n4: "one-shot, không reset"
+}
+g2: "StampedLock" {
+  grid-columns: 1
+  n0: "không dùng AQS"
+  n1: "read/write state + stamp/version"
+  n2: "pessimistic read/write"
+  n3: "optimistic read + validate"
+  n4: "không reentrant"
+}
 ```
 
 Câu chọn công cụ ngắn nhất:

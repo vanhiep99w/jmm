@@ -129,15 +129,23 @@ vi phần cứng — dựa vào HB. Xem [Memory Barriers](/jmm/04-memory-barrier
 
 ## 2. Cây quyết định chọn công cụ
 
-```mermaid
-graph TD
-    Q0[Cần chia sẻ state giữa thread?] -->|Không| IMM[Immutable / Confinement → xong]
-    Q0 -->|Có| Q1[Chỉ cần visibility cho 1 biến?]
-    Q1 -->|Có, chỉ đọc/ghi đơn| VOL[volatile]
-    Q1 -->|Cần atomic 1 biến| ATM[Atomic* / VarHandle / LongAdder]
-    Q1 -->|Nhiều biến / invariant phức tạp| Q2[Đọc nhiều, ghi ít?]
-    Q2 -->|Có| RW[ReadWriteLock / StampedLock]
-    Q2 -->|Không| LK[synchronized / ReentrantLock]
+```d2 interactive title="Cây quyết định chọn công cụ"
+direction: down
+Q0: "Cần chia sẻ state giữa thread?"
+IMM: "Immutable / Confinement → xong"
+Q1: "Chỉ cần visibility cho 1 biến?"
+VOL: "volatile"
+ATM: "Atomic* / VarHandle / LongAdder"
+Q2: "Đọc nhiều, ghi ít?"
+RW: "ReadWriteLock / StampedLock"
+LK: "synchronized / ReentrantLock"
+Q0 -> IMM: "Không"
+Q0 -> Q1: "Có"
+Q1 -> VOL: "Có, chỉ đọc/ghi đơn"
+Q1 -> ATM: "Cần atomic 1 biến"
+Q1 -> Q2: "Nhiều biến / invariant phức tạp"
+Q2 -> RW: "Có"
+Q2 -> LK: "Không"
 ```
 
 ## 3. Checklist review code đồng thời

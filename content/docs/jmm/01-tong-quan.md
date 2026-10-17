@@ -165,14 +165,20 @@ count++;
 
 ## 5. Bức tranh tổng thể
 
-```mermaid
-graph TD
-    A[Code bạn viết] --> B[Compiler / JIT có thể reorder]
-    B --> C[CPU out-of-order + cache/store buffer]
-    C --> D[Kết quả quan sát được giữa các thread]
-    E[volatile / synchronized / j.u.c] -->|tạo happens-before + chèn barrier| B
-    E --> C
-    D -->|JMM bảo đảm đúng nếu tuân thủ HB| F[Chương trình chạy đúng trên mọi CPU]
+```d2 interactive title="Bức tranh tổng thể"
+direction: down
+A: "Code bạn viết"
+B: "Compiler / JIT có thể reorder" {icon: https://icons.d2lang.com/dev/java.svg}
+C: "CPU out-of-order + cache/store buffer" {icon: https://icons.d2lang.com/tech/014-cpu.svg}
+D: "Kết quả quan sát được giữa các thread"
+E: "volatile / synchronized / j.u.c"
+F: "Chương trình chạy đúng trên mọi CPU"
+A -> B
+B -> C
+C -> D
+E -> B: "tạo happens-before + chèn barrier"
+E -> C
+D -> F: "JMM bảo đảm đúng nếu tuân thủ HB"
 ```
 
 > [!TIP]

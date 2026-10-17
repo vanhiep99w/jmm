@@ -23,26 +23,63 @@ buộc** dùng `volatile` mới đúng.
 
 ## 1. DCL là gì
 
-```java
-class SafeSingleton {
-    private static volatile SafeSingleton INSTANCE; // ✅ bắt buộc volatile
+```code-walkthrough
+title: SafeSingleton.java — đọc DCL theo từng bước
+language: java
+snapshots:
+  - id: safe
+    title: SafeSingleton.java
+    code: |-
+      class SafeSingleton {
+          private static volatile SafeSingleton INSTANCE; // ✅ bắt buộc volatile
 
-    private SafeSingleton() { /* init đầy đủ */ }
+          private SafeSingleton() { /* init đầy đủ */ }
 
-    static SafeSingleton get() {
-        SafeSingleton r = INSTANCE;             // local fast-path
-        if (r == null) {
-            synchronized (SafeSingleton.class) {
-                r = INSTANCE;
-                if (r == null) {
-                    r = new SafeSingleton();
-                    INSTANCE = r;               // volatile write (release)
-                }
-            }
-        }
-        return r;                               // volatile read (acquire)
-    }
-}
+          static SafeSingleton get() {
+              SafeSingleton r = INSTANCE;             // volatile read (acquire), local fast-path
+              if (r == null) {
+                  synchronized (SafeSingleton.class) {
+                      r = INSTANCE;
+                      if (r == null) {
+                          r = new SafeSingleton();
+                          INSTANCE = r;               // volatile write (release)
+                      }
+                  }
+              }
+              return r;                               // trả biến local
+          }
+      }
+steps:
+  - id: volatile
+    snapshot: safe
+    title: Field volatile là kênh publish
+    description: INSTANCE phải là volatile để lần ghi release kết nối với lần đọc acquire nhìn thấy reference đó.
+    ranges:
+      - - 2
+        - 2
+  - id: fast-path
+    snapshot: safe
+    title: Check đầu tiên, ngoài lock
+    description: Đọc volatile vào biến local r. Khi r khác null, trả ngay; không cần vào synchronized.
+    ranges:
+      - - 7
+        - 8
+      - - 17
+        - 17
+  - id: recheck
+    snapshot: safe
+    title: Lấy lock rồi kiểm tra lần nữa
+    description: Thread khác có thể đã khởi tạo khi thread này chờ lock. Đọc lại INSTANCE bên trong cùng monitor, chỉ new khi nó vẫn null.
+    ranges:
+      - - 9
+        - 12
+  - id: publish
+    snapshot: safe
+    title: Khởi tạo xong rồi publish
+    description: Constructor hoàn tất trước volatile write INSTANCE = r. Reader đọc được reference này sẽ thấy trạng thái được khởi tạo trước lần publish.
+    ranges:
+      - - 12
+        - 13
 ```
 
 Logic:
